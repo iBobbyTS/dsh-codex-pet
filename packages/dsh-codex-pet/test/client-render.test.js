@@ -399,3 +399,62 @@ test('createServiceSource resolves a late internal service and notifies subscrib
   assert.equal(noGet.getSnapshot(), undefined, 'a context without ctx.get does not throw');
   noGet.dispose();
 });
+
+test('pinPlacement keeps an empty or unknown pin in the bottom-right corner', () => {
+  const { pinPlacement, DEFAULT_PIN } = mod.__internals;
+  const pw = 1200, ph = 800, w = 120, h = 132, margin = 12;
+  const bottomRight = { left: pw - w - margin, top: ph - h - margin };
+
+  assert.deepEqual(pinPlacement('top-left', pw, ph, w, h, margin), { left: margin, top: margin });
+  assert.deepEqual(pinPlacement('center', pw, ph, w, h, margin), { left: (pw - w) / 2, top: (ph - h) / 2 });
+  assert.deepEqual(pinPlacement('bottom-right', pw, ph, w, h, margin), bottomRight);
+  // A falsy pin used to leave the pet at the container origin, i.e. the top-left
+  // corner of the screen, with its bubbles following it there.
+  assert.deepEqual(pinPlacement('', pw, ph, w, h, margin), bottomRight, 'an empty pin falls back to the corner');
+  assert.deepEqual(pinPlacement('sideways', pw, ph, w, h, margin), bottomRight, 'an unknown pin falls back to the corner');
+  assert.equal(DEFAULT_PIN, 'bottom-right');
+});
+
+test('bubblePlacement refuses a pet box it cannot trust', () => {
+  const { bubblePlacement } = mod.__internals;
+  const host = { left: 0, top: 0, height: 800 };
+
+  assert.equal(bubblePlacement(null, 160, host, 1200, 8), null, 'no box at all');
+  assert.equal(bubblePlacement({ left: 0, top: 0, width: 0, height: 0 }, 160, host, 1200, 8), null, 'a zero-sized pet');
+  assert.equal(bubblePlacement({ left: 10, top: 10, width: 120, height: 0 }, 160, host, 1200, 8), null, 'a pet without height');
+  assert.equal(bubblePlacement({ left: Number.NaN, top: 10, width: 120, height: 132 }, 160, host, 1200, 8), null, 'a NaN offset');
+});
+
+test('bubblePlacement centers the bubble over the pet and puts the tail on the pet', () => {
+  const { bubblePlacement } = mod.__internals;
+  const host = { left: 0, top: 0, height: 800 };
+
+  const spot = bubblePlacement({ left: 500, top: 300, width: 120, height: 132 }, 160, host, 1200, 8);
+  assert.equal(spot.left, 480, 'the bubble is centered on the pet');
+  assert.equal(spot.bottom, 508, 'the bubble sits gap px above the pet top edge');
+  assert.equal(spot.tailX, 80, 'the tail points at the pet center, in bubble coordinates');
+});
+
+test('bubblePlacement clamps both viewport edges instead of leaving the screen', () => {
+  const { bubblePlacement } = mod.__internals;
+  const host = { left: 0, top: 0, height: 800 };
+  const gap = 8;
+
+  const leftEdge = bubblePlacement({ left: 0, top: 600, width: 120, height: 132 }, 160, host, 1200, gap);
+  assert.equal(leftEdge.left, gap, 'a pet at the left edge keeps the bubble inside the viewport');
+  assert.equal(leftEdge.bottom, 208);
+
+  const rightEdge = bubblePlacement({ left: 1080, top: 668, width: 120, height: 132 }, 160, host, 1200, gap);
+  assert.equal(rightEdge.left, 1200 - gap - 160, 'a pet at the right edge keeps the bubble inside the viewport');
+
+  // A host that does not start at the viewport origin (the overlay is inset):
+  // clamping works in viewport space, so the bubble still touches the edge.
+  const inset = { left: 40, top: 20, height: 800 };
+  const insetSpot = bubblePlacement({ left: 0, top: 600, width: 120, height: 132 }, 300, inset, 1200, gap);
+  assert.equal(inset.left + insetSpot.left, gap, 'the clamp accounts for the host offset');
+
+  // A pet pinned to the top-left corner: the bubble stays visible at the top.
+  const corner = bubblePlacement({ left: 12, top: 12, width: 120, height: 132 }, 160, host, 1200, gap);
+  assert.equal(corner.left, gap);
+  assert.equal(corner.bottom, 796, 'the bubble hangs just above the pet instead of off-screen');
+});

@@ -174,44 +174,35 @@ window.__ModuleLoader__.load({
 				return controller;
 			}
 
+			// Last placement we applied, in container coordinates. Bubbles fall back
+			// to it when the pet's live rect is unavailable (e.g. for a frame while
+			// the overlay is being rebuilt), so nothing is ever positioned from an
+			// empty measurement — that would land at the container origin, which is
+			// the top-left corner of the screen.
+			let box = null;
+
+			function setBox(left, top) {
+				box = { left, top, width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale };
+			}
+
 			function place() {
 				if (dragging) return;
 				if (options.position) {
 					el.style.left = `${options.position.x}px`;
 					el.style.top = `${options.position.y}px`;
+					setBox(options.position.x, options.position.y);
 					return;
 				}
-				const pin = options.pin;
-				if (pin) {
-					const pw = container.clientWidth || window.innerWidth;
-					const ph = container.clientHeight || window.innerHeight;
-					const w = FRAME_WIDTH * scale;
-					const h = FRAME_HEIGHT * scale;
-					const margin = 12;
-					let left, top;
-					switch (pin) {
-						case "top-left": left = margin; top = margin; break;
-						case "top": left = (pw - w) / 2; top = margin; break;
-						case "top-right": left = pw - w - margin; top = margin; break;
-						case "left": left = margin; top = (ph - h) / 2; break;
-						case "center": left = (pw - w) / 2; top = (ph - h) / 2; break;
-						case "right": left = pw - w - margin; top = (ph - h) / 2; break;
-						case "bottom-left": left = margin; top = ph - h - margin; break;
-						case "bottom": left = (pw - w) / 2; top = ph - h - margin; break;
-						case "bottom-right":
-						default: left = pw - w - margin; top = ph - h - margin; break;
-					}
-					el.style.left = `${left}px`;
-					el.style.top = `${top}px`;
-				}
+				// An empty or unknown pin still has to land somewhere sane: without
+				// one the pet itself would sit at the container origin.
+				const pin = PINS.indexOf(options.pin) >= 0 ? options.pin : DEFAULT_PIN;
+				const at = pinPlacement(pin, container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight, FRAME_WIDTH * scale, FRAME_HEIGHT * scale, 12);
+				el.style.left = `${at.left}px`;
+				el.style.top = `${at.top}px`;
+				setBox(at.left, at.top);
 			}
 
-			if (options.position) {
-				el.style.left = `${options.position.x}px`;
-				el.style.top = `${options.position.y}px`;
-			} else {
-				place();
-			}
+			place();
 			const onResize = () => place();
 			window.addEventListener("resize", onResize);
 
@@ -318,7 +309,7 @@ window.__ModuleLoader__.load({
 					place(); paint(); return controller;
 				},
 				setPin(pin) { options.pin = pin; place(); return controller; },
-				setPosition(x, y) { el.style.left = `${x}px`; el.style.top = `${y}px`; return controller; },
+				setPosition(x, y) { el.style.left = `${x}px`; el.style.top = `${y}px`; setBox(x, y); return controller; },
 				// Forget a dragged position so placement falls back to the pin again
 				// (the host's "restore position" button clears the saved left/top).
 				clearPosition() { options.position = undefined; place(); return controller; },
@@ -326,6 +317,8 @@ window.__ModuleLoader__.load({
 				get dragging() { return dragging; },
 				get lookIndex() { return lookIndex; },
 				get element() { return el; },
+				// Where the pet is (or is about to be), in container coordinates.
+				get box() { return box; },
 				dispose() {
 					disposed = true;
 					cancelAnimationFrame(rafId);
@@ -939,6 +932,11 @@ window.__ModuleLoader__.load({
 			const doneTimerRef = react.useRef(0);
 			const journalRef = react.useRef(null);
 			const journalHideTimerRef = react.useRef(0);
+			// Pending "show it as soon as it can be placed" retries: a bubble is only
+			// revealed once its position is known, never at the host's origin.
+			const bubbleRevealTimerRef = react.useRef(0);
+			const summaryRevealTimerRef = react.useRef(0);
+			const journalRevealTimerRef = react.useRef(0);
 			const journalCacheRef = react.useRef({ sessionId: null, at: 0, items: null });
 			const menuRef = react.useRef(null);
 			const summaryRetryTimerRef = react.useRef(0);
@@ -984,6 +982,9 @@ window.__ModuleLoader__.load({
 					clearTimeout(doneTimerRef.current);
 					clearTimeout(summaryHideTimerRef.current);
 					clearTimeout(journalHideTimerRef.current);
+					clearTimeout(bubbleRevealTimerRef.current);
+					clearTimeout(summaryRevealTimerRef.current);
+					clearTimeout(journalRevealTimerRef.current);
 					if (summaryBubbleRef.current) summaryBubbleRef.current.classList.remove("visible");
 					if (journalRef.current) journalRef.current.classList.remove("visible");
 					closeMenuRef.current();
@@ -1058,23 +1059,56 @@ window.__ModuleLoader__.load({
 				}
 			}, [state, snap && snap.sessionId]);
 
+			// The pet's box in host coordinates: its live rect when that is usable,
+			// otherwise the last placement the pet controller applied. The live rect
+			// can be missing for a moment (right after the overlay rebuilt itself, or
+			// before the sprite is laid out), and the controller still knows where the
+			// pet belongs.
+			function currentPetBox(hostRect) {
+				const pet = petRef.current;
+				if (pet && pet.element && pet.element.isConnected) {
+					const pr = pet.element.getBoundingClientRect();
+					if (pr.width > 0 || pr.height > 0) {
+						return { left: pr.left - hostRect.left, top: pr.top - hostRect.top, width: pr.width, height: pr.height };
+					}
+				}
+				if (pet && pet.box) return pet.box;
+				return null;
+			}
+
 			// Shared placement for both bubbles (progress + summary): centered over
 			// the pet, clamped to the viewport, tail pointing at the pet's center.
+			// Returns false when the pet's geometry is unknown — the caller must then
+			// keep the bubble hidden, because an unplaced bubble would render at the
+			// host origin, i.e. the top-left corner of the screen.
 			function positionBubbleEl(b, bw) {
-				const pet = petRef.current;
 				const host = ref.current;
-				if (!pet || !b || !host || !b.isConnected) return;
-				const pr = pet.element.getBoundingClientRect();
-				const hr = host.getBoundingClientRect();
+				if (!b || !host || !b.isConnected) return false;
+				const hostRect = host.getBoundingClientRect();
 				const vw = window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 1200;
-				const gap = 8;
-				let left = (pr.left - hr.left) + (pr.width - bw) / 2;
-				const viewportLeft = hr.left + left;
-				if (viewportLeft < gap) left = gap - hr.left;
-				else if (viewportLeft + bw > vw - gap) left = (vw - gap) - bw - hr.left;
-				b.style.left = `${left}px`;
-				b.style.bottom = `${hr.bottom - pr.top + gap}px`;
-				b.style.setProperty("--tail-x", `${pr.left + pr.width / 2 - (hr.left + left)}px`);
+				const spot = bubblePlacement(currentPetBox(hostRect), bw, hostRect, vw, 8);
+				if (!spot) return false;
+				b.style.left = `${spot.left}px`;
+				b.style.bottom = `${spot.bottom}px`;
+				b.style.setProperty("--tail-x", `${spot.tailX}px`);
+				return true;
+			}
+
+			// Position first, show second. While the pet's geometry cannot be resolved
+			// (for example during the overlay rebuild triggered by leaving the settings
+			// panel) the bubble stays hidden and is retried for a moment instead of
+			// flashing in the top-left corner.
+			function revealWhenPositioned(el, bw, timerRef, apply, attempt = 0) {
+				clearTimeout(timerRef.current);
+				timerRef.current = 0;
+				if (!el) return false;
+				if (positionBubbleEl(el, bw)) { apply(); return true; }
+				if (attempt >= REVEAL_RETRIES) return false;
+				timerRef.current = setTimeout(() => {
+					if (el !== bubbleRef.current && el !== summaryBubbleRef.current && el !== journalRef.current) return;
+					revealWhenPositioned(el, bw, timerRef, apply, attempt + 1);
+				}, REVEAL_RETRY_MS);
+				return false;
 			}
 
 			function positionBubble() {
@@ -1226,8 +1260,7 @@ window.__ModuleLoader__.load({
 					} else {
 						renderJournal(journalCacheRef.current.items);
 					}
-					journal.classList.add("visible");
-					positionJournal();
+					revealWhenPositioned(journal, 300, journalRevealTimerRef, () => { journal.classList.add("visible"); });
 					// Newest puff sits at the bottom edge, next to the pet.
 					requestAnimationFrame(() => { journal.scrollTop = journal.scrollHeight; });
 				}
@@ -1417,6 +1450,9 @@ window.__ModuleLoader__.load({
 					menuRef.current = null;
 					clearTimeout(summaryHideTimerRef.current);
 					clearTimeout(journalHideTimerRef.current);
+					clearTimeout(bubbleRevealTimerRef.current);
+					clearTimeout(summaryRevealTimerRef.current);
+					clearTimeout(journalRevealTimerRef.current);
 				};
 			}, [configKey]);
 
@@ -1495,15 +1531,18 @@ window.__ModuleLoader__.load({
 			}
 
 			// Show one periodic-summary bubble for bubbleSeconds, then fade it out.
+			// It is revealed only once it has actually been placed next to the pet.
 			function showSummaryBubble(text) {
 				const b = summaryBubbleRef.current;
 				if (!b || !text) return;
 				b.textContent = text;
-				b.classList.add("visible");
-				positionSummaryBubble();
-				clearTimeout(summaryHideTimerRef.current);
 				const seconds = Math.max(3, (summaryStateRef.current && summaryStateRef.current.bubbleSeconds) || 12);
-				summaryHideTimerRef.current = setTimeout(() => { b.classList.remove("visible"); }, seconds * 1000);
+				clearTimeout(summaryHideTimerRef.current);
+				revealWhenPositioned(b, b.offsetWidth || 160, summaryRevealTimerRef, () => {
+					b.classList.add("visible");
+					clearTimeout(summaryHideTimerRef.current);
+					summaryHideTimerRef.current = setTimeout(() => { b.classList.remove("visible"); }, seconds * 1000);
+				});
 			}
 
 			// Periodic request-summary: watch completed assistant requests; once
@@ -1655,10 +1694,15 @@ window.__ModuleLoader__.load({
 				if (!b) return;
 				if (showBubble && bubbleText) {
 					b.textContent = bubbleText;
-					b.style.display = "block";
-					bubbleWidthRef.current = b.offsetWidth || 120;
-					positionBubble();
+					// Same rule as the summary bubble: place it before showing it, so a
+					// progress bubble can never flash in the corner either.
+					revealWhenPositioned(b, bubbleWidthRef.current || 120, bubbleRevealTimerRef, () => {
+						b.style.display = "block";
+						bubbleWidthRef.current = b.offsetWidth || 120;
+						positionBubble();
+					});
 				} else {
+					clearTimeout(bubbleRevealTimerRef.current);
 					b.style.display = "none";
 				}
 			}, [showBubble, bubbleText]);
@@ -1682,6 +1726,42 @@ window.__ModuleLoader__.load({
 		// ================================================================
 
 		const PINS = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"];
+		// Fallback for an empty or unknown pin: the host repairs those too, but the
+		// placement math must never leave the pet itself at the container origin.
+		const DEFAULT_PIN = "bottom-right";
+
+		// Where a pin puts the pet inside a pw x ph container, for a w x h sprite.
+		function pinPlacement(pin, pw, ph, w, h, margin) {
+			switch (pin) {
+				case "top-left": return { left: margin, top: margin };
+				case "top": return { left: (pw - w) / 2, top: margin };
+				case "top-right": return { left: pw - w - margin, top: margin };
+				case "left": return { left: margin, top: (ph - h) / 2 };
+				case "center": return { left: (pw - w) / 2, top: (ph - h) / 2 };
+				case "right": return { left: pw - w - margin, top: (ph - h) / 2 };
+				case "bottom-left": return { left: margin, top: ph - h - margin };
+				case "bottom": return { left: (pw - w) / 2, top: ph - h - margin };
+				default: return { left: pw - w - margin, top: ph - h - margin };
+			}
+		}
+
+		// Where a bubble of width bw belongs, gap px above the pet's box, in host
+		// coordinates. Returns null for an unusable box: the caller must then keep
+		// the bubble hidden instead of showing it at the host origin, which is the
+		// top-left corner of the screen.
+		function bubblePlacement(box, bw, hostRect, viewportWidth, gap) {
+			if (!box || !isFinite(box.left) || !isFinite(box.top) || !(box.width > 0) || !(box.height > 0)) return null;
+			let left = box.left + (box.width - bw) / 2;
+			const viewportLeft = hostRect.left + left;
+			if (viewportLeft < gap) left = gap - hostRect.left;
+			else if (viewportLeft + bw > viewportWidth - gap) left = (viewportWidth - gap) - bw - hostRect.left;
+			return { left, bottom: hostRect.height - box.top + gap, tailX: box.left + box.width / 2 - left };
+		}
+
+		// How long a bubble may wait for the pet's geometry before it gives up (and
+		// simply stays hidden: a bubble without a position is worse than no bubble).
+		const REVEAL_RETRIES = 12;
+		const REVEAL_RETRY_MS = 100;
 
 		function field(label, control) {
 			return react.createElement("label", { style: { display: "grid", gap: "4px", fontSize: "13px" } },
@@ -2163,7 +2243,7 @@ window.__ModuleLoader__.load({
 		exports.deriveActivity = deriveActivity;
 		// Render-smoke hook: lets the node test suite mount the settings UI
 		// without a browser. The host reads only apply/inject.
-			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual };
+			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
 		return module.exports;
 	}
 });

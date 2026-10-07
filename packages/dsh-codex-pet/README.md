@@ -165,6 +165,13 @@ src/
   «还原 Reset», and re-seats the pet in place whenever the host bumps
   `display.layoutRev` — a dragged `left`/`top` outranks the pin, so clearing it
   changes none of the fields the pet is recreated for.
+  Bubbles, the journal and the context menu are absolutely positioned with no
+  default coordinates, so the rule is **place first, show second**: a reveal
+  reads the pet's live rect, falls back to the placement the controller recorded
+  (`controller.box`, also used to seat the pet itself when a pin is empty or
+  unknown), and otherwise keeps the element hidden while retrying every 100 ms
+  for up to 1.2 s. An unplaced overlay would render at the host origin, i.e. the
+  top-left corner of the screen.
 
 ### API
 
