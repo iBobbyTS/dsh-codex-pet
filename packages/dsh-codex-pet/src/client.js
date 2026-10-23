@@ -812,7 +812,18 @@ window.__ModuleLoader__.load({
 			const nodes = [];
 			const turnEnds = new Map();
 			for (const entry of eventNodes) {
-				const data = entry && entry.data;
+				if (!entry) continue;
+				// Current host: ui-trajectory's snapshot builder pushes the produced
+				// node straight into `eventNodes`, so the entry IS the legacy node.
+				// Reading `entry.data` here used to leave every summary without user
+				// text, reply text or tool calls — the model then reported that the
+				// whole batch was empty.
+				if (entry.kind === "user" || entry.kind === "assistant" || entry.kind === "tool-result") {
+					nodes.push(entry);
+					continue;
+				}
+				// Older hosts wrapped each contribution as `{ data: { kind, node } }`.
+				const data = entry.data;
 				if (!data) continue;
 				// A message contribution wraps its legacy node; an assistant step
 				// wraps the finalized one (absent while the step still streams).
@@ -824,6 +835,23 @@ window.__ModuleLoader__.load({
 					turnEnds.set(data.turn, { time: data.time, error: data.error, errorCode: data.errorCode });
 					// A turn/end that carries an error is the current host's turn-error.
 					if (data.error !== undefined) nodes.push({ kind: "turn-error", turn: data.turn, step: Number.MAX_SAFE_INTEGER, message: data.error });
+				}
+			}
+			// The current host reports a failure on the request itself, and a retried
+			// step keeps updating that one request, so the newest request of each turn
+			// decides whether the turn ended on an error.
+			const requests = trajectory && Array.isArray(trajectory.requests) ? trajectory.requests : null;
+			if (requests) {
+				const newestPerTurn = new Map();
+				for (const request of requests) {
+					if (!request || request.purpose !== "assistant") continue;
+					if (!Number.isSafeInteger(request.turn) || !Number.isSafeInteger(request.startSeq)) continue;
+					const seen = newestPerTurn.get(request.turn);
+					if (!seen || seen.startSeq < request.startSeq) newestPerTurn.set(request.turn, request);
+				}
+				for (const [turn, request] of newestPerTurn) {
+					if (request.status !== "error") continue;
+					nodes.push({ kind: "turn-error", turn, step: Number.MAX_SAFE_INTEGER, message: request.error || "模型请求失败" });
 				}
 			}
 			return { nodes, turnEnds };

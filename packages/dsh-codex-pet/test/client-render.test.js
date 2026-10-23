@@ -316,6 +316,82 @@ test('legacyProjectionOf rebuilds nodes and turn ends from trajectory events', (
   assert.deepEqual(legacyProjectionOf({ eventNodes: [null, {}] }), { nodes: [], turnEnds: new Map() });
 });
 
+test('legacyProjectionOf reads the finalized nodes the current host emits', () => {
+  const { legacyProjectionOf } = mod.__internals;
+  const user = { kind: 'user', seq: 1, turn: 1, content: [{ type: 'text', text: '读一下日志' }] };
+  const assistant = {
+    kind: 'assistant', seq: 20, turn: 1, step: 1,
+    blocks: [{ kind: 'tool-call', callId: 'call-9', name: 'read_file', argsRaw: '{"path":"app.log"}' }],
+  };
+  const result = { kind: 'tool-result', seq: 24, callId: 'call-9', isError: false };
+
+  // ui-trajectory pushes the produced node itself, not a { data } contribution.
+  const projection = legacyProjectionOf({ eventNodes: [user, assistant, result] });
+  assert.equal(projection.nodes.length, 3, 'every finalized node survives the projection');
+  assert.equal(projection.nodes[0], user);
+  assert.equal(projection.nodes[1], assistant);
+  assert.equal(projection.nodes[2], result);
+
+  // A host that still wraps something keeps working through the same fold.
+  const mixed = legacyProjectionOf({
+    eventNodes: [user, { data: { kind: 'node', node: { kind: 'user', seq: 5, content: [] } } }],
+  });
+  assert.deepEqual(mixed.nodes.map((node) => node.seq), [1, 5]);
+});
+
+test('the automatic summary receives the real actions from a current-host trajectory', () => {
+  const { mergeConversationSnapshot, completedModelRequestsOf, buildSummaryPayload } = mod.__internals;
+  const trajectory = {
+    partial: null,
+    runningCalls: [],
+    requests: [
+      { purpose: 'assistant', startSeq: 10, resultSeq: 20, turn: 1, step: 1, status: 'complete' },
+      { purpose: 'assistant', startSeq: 30, resultSeq: 40, turn: 1, step: 2, status: 'complete' },
+    ],
+    eventNodes: [
+      { kind: 'user', seq: 1, turn: 1, content: [{ type: 'text', text: '把日志里的报错找出来' }] },
+      { kind: 'assistant', seq: 20, turn: 1, step: 1, blocks: [{ kind: 'tool-call', callId: 'call-1', name: 'read_file', argsRaw: '{"path":"app.log"}' }] },
+      { kind: 'tool-result', seq: 24, callId: 'call-1', isError: true },
+      { kind: 'assistant', seq: 40, turn: 1, step: 2, blocks: [{ kind: 'text', text: '找到了三处报错' }] },
+    ],
+  };
+
+  const snap = mergeConversationSnapshot({ key: 'session-live', hooks: {} }, trajectory, null, null);
+  assert.equal(snap.nodes.length, 4, 'the merged snapshot carries the nodes');
+
+  const completed = completedModelRequestsOf(snap);
+  const payload = buildSummaryPayload(snap.nodes, completed, 'session-live');
+  assert.equal(payload.requests.length, 2);
+  assert.equal(payload.requests[0].user, '把日志里的报错找出来', 'the user instruction reaches the summarizer');
+  assert.deepEqual(payload.requests[0].actions.map((action) => action.tool), ['read_file'], 'tool calls reach the summarizer');
+  assert.equal(payload.requests[0].actions[0].failed, true, 'a failed tool result is still marked');
+  assert.equal(payload.requests[1].assistant, '找到了三处报错', 'the reply text reaches the summarizer');
+});
+
+test('the newest request of a turn decides the synthesized turn error', () => {
+  const { legacyProjectionOf, latestTurnErrored } = mod.__internals;
+  const failed = legacyProjectionOf({
+    eventNodes: [],
+    requests: [{ purpose: 'assistant', startSeq: 10, turn: 2, step: 1, status: 'error', error: 'provider failed' }],
+  });
+  assert.deepEqual(failed.nodes.map((node) => node.kind), ['turn-error']);
+  assert.equal(failed.nodes[0].turn, 2);
+  assert.equal(failed.nodes[0].message, 'provider failed');
+  assert.equal(latestTurnErrored({ nodes: failed.nodes, turnEnds: new Map([[2, 99]]) }), true);
+
+  // A retried step keeps updating its request, so a later success clears the turn.
+  const recovered = legacyProjectionOf({
+    eventNodes: [],
+    requests: [
+      { purpose: 'assistant', startSeq: 10, turn: 2, step: 1, status: 'error', error: 'provider failed' },
+      { purpose: 'assistant', startSeq: 30, turn: 2, step: 2, status: 'complete' },
+      { purpose: 'compaction', startSeq: 40, turn: 2, step: 0, status: 'error', error: 'ignored' },
+    ],
+  });
+  assert.deepEqual(recovered.nodes, [], 'a turn that moved on is not reported as failed');
+  assert.equal(latestTurnErrored({ nodes: recovered.nodes, turnEnds: new Map([[2, 99]]) }), false);
+});
+
 test('mergeConversationSnapshot folds the current host bindings into one snapshot', () => {
   const { mergeConversationSnapshot } = mod.__internals;
   const { deriveActivity } = mod;

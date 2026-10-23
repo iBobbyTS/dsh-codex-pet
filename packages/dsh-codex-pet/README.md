@@ -73,7 +73,13 @@ the pet appeared but never spoke). The overlay now reads the internal
   accumulated chunks);
 - `hooks.session` → `running`, `pendingSubmissions`, `openState`;
 - `nodes` / `turnEnds` are rebuilt from the trajectory event nodes, keeping the
-  done chime and the periodic summaries working.
+  done chime and the periodic summaries working. `ui-trajectory` pushes the
+  **finalized node itself** into `eventNodes` (`{ kind: "user" | "assistant" |
+  "tool-result", seq, turn, step, blocks, … }`), so that is the shape read here;
+  the older `{ data: { kind, node } }` contribution wrapper is still accepted as
+  a fallback. Reading only the wrapper is what made every summary claim the pet
+  had done nothing (0.4.1 and earlier): the node array came out empty, so the
+  summarizer received no instruction, no reply text and no tool calls.
 
 `uiSession` is deliberately **not** listed in `inject`: it is an internal service
 that older hosts never provide, and Cordis parks the entire plugin when a hard
