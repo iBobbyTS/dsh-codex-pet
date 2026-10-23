@@ -119,10 +119,17 @@ Rollback: delete `~/.dsh/profiles/node_modules/@signalight/dsh-codex-pet` and re
 ## Add a pet
 
 A pet is a folder holding a `pet.json` manifest plus one atlas image. Drop it
-into either source (user pets override built-ins on id collision):
+into any source (later sources override earlier ones on id collision):
 
 - built-in: `packages/dsh-codex-pet/assets/<pet>/`
+- Codex pets: `~/.codex/pets/<pet>/` — read **in place**, nothing is copied;
+  point `CODEX_HOME` elsewhere to use a different Codex home
 - user: `~/.dsh/pets/<pet>/` (survives plugin updates)
+
+Resolution order is **built-in → Codex → user**, so a pet you import
+overrides the same id coming from Codex, which overrides the bundled example.
+The settings surface groups the gallery by these three sources and puts a
+`v1` / `v2` badge on every card.
 
 `pet.json`:
 
@@ -139,8 +146,24 @@ into either source (user pets override built-ins on id collision):
 ```
 
 Only `id` and `spritesheetPath` are required. `spriteVersionNumber` is
-auto-detected from the image dimensions when omitted; `size` (px width) and
-`pin` (`top-left` / `bottom-right` / …) default to `120` and `bottom-right`.
+auto-detected from the image dimensions when omitted (1536×1872 = v1, nine
+rows; 1536×2288 = v2, eleven rows); `size` (px width) and `pin` (`top-left` /
+`bottom-right` / …) default to `120` and `bottom-right`.
+
+### Reading local Codex pets
+
+`GET /api/codex-pet/state` reports `codexPets: { enabled }` and
+`codexPetsDir`, and `POST /api/codex-pet/set-config` accepts
+`{ "codexPets": { "enabled": false } }` to stop reading them (the default is
+`true`). Toggling the source rebuilds the registry immediately and re-seats a
+selection that no longer exists, so the pet never points at a vanished atlas.
+`resetAll()` puts the switch back to its default.
+
+The browser half renders the picker as a gallery: each card shows the atlas's
+first cell as a thumbnail, mounted only while the card is near the viewport
+(`IntersectionObserver`, `rootMargin: 300px`) and unmounted once it scrolls
+away — a decoded atlas is roughly 14 MB, so keeping a dozen of them alive would
+stall the settings page.
 
 **No manual editing needed**: in the DSH settings surface open the «桌宠»
 section and click **导入桌宠 (webp / png / gif)** — the plugin writes the file
@@ -184,9 +207,9 @@ src/
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
 | `/api/codex-pet/pets` | GET | pet registry (list of definitions) |
-| `/api/codex-pet/state` | GET | selected pet + display config |
+| `/api/codex-pet/state` | GET | selected pet, display config, `codexPets` switch + `codexPetsDir`, pet list with `source` / `spriteVersionNumber` |
 | `/api/codex-pet/set-pet` | POST | `{ petId }` — switch pet |
-| `/api/codex-pet/set-config` | POST | update display, `summary`, or `sound` settings |
+| `/api/codex-pet/set-config` | POST | update display, `summary`, `sound`, or `{ codexPets: { enabled } }` |
 | `/api/codex-pet/set-visible` | POST | `{ visible }` |
 | `/api/codex-pet/reset-position` | POST | drop a dragged `left`/`top` so the pet is re-seated by its pin |
 | `/api/codex-pet/reset-all` | POST | restore every setting to its default; pet choice and imported files stay |
@@ -209,6 +232,8 @@ overrides are stored under `~/.dsh/pets/sounds/` and survive plugin updates.
       the last is v2-only and noted as such), backed by the plugin's own API.
 - [x] In-GUI import button (upload a Codex atlas → auto-detect → install →
       select).
+- [x] Read the local Codex pet folder (`~/.codex/pets`) automatically, with a
+      thumbnail gallery, `v1` / `v2` badges and a default-on switch.
 - [ ] In-GUI preview before import (live canvas frame preview).
 - [x] Published to npm (`@signalight/dsh-codex-pet`) + `dsh-plugin` GitHub topic.
 

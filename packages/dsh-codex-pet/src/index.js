@@ -24,10 +24,12 @@ export const inject = ['webServer']
 
 /** Register the pet service and its API + asset routes on the context. */
 export function apply(ctx, config = {}) {
-  const registry = config.registry ?? loadPetRegistry({
-    packageRoot: petPackageRoot(import.meta.url),
-  })
-  const service = new PetService({ ...config, registry, packageRoot: petPackageRoot(import.meta.url) })
+  const packageRoot = petPackageRoot(import.meta.url)
+  // An injected registry (tests, custom hosts) is fixed; the normal path can
+  // be rebuilt whenever the 'codexPets' switch changes.
+  const loadPets = config.registry ? null : (codexPets) => loadPetRegistry({ packageRoot, codexPets })
+  const registry = config.registry ?? loadPets(true)
+  const service = new PetService({ ...config, registry, loadPets, packageRoot })
   // Optional services are resolved through Cordis rather than a fiber property.
   const getLlm = () => config.llm ?? ctx.get('llm') ?? null
   const routes = makeCodexPetRoutes({ service, getLlm })
@@ -49,6 +51,6 @@ export function apply(ctx, config = {}) {
   }, 'codex-pet: scenario-events')
 }
 
-export { loadPetRegistry, petPackageRoot, petEntryView, userPetsDir } from './registry.js'
+export { loadPetRegistry, petPackageRoot, petEntryView, userPetsDir, codexHome, codexPetsDir, PET_SOURCES } from './registry.js'
 export { PetService, persistPath, userSoundsDir, SUMMARY_TIMEOUT_MS } from './service.js'
 export { makeCodexPetRoutes, PET_API_PREFIX, PET_ASSET_PREFIX, SOUND_ROUTE } from './routes.js'

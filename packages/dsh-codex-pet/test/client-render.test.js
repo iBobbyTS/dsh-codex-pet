@@ -534,3 +534,57 @@ test('bubblePlacement clamps both viewport edges instead of leaving the screen',
   assert.equal(corner.left, gap);
   assert.equal(corner.bottom, 796, 'the bubble hangs just above the pet instead of off-screen');
 });
+
+// ---------------------------------------------------------------
+// Pet gallery (settings picker over built-in / Codex / user pets).
+// ---------------------------------------------------------------
+
+const GALLERY_PETS = [
+  { id: 'builtin-one', displayName: '内置一号', source: 'builtin', spriteVersionNumber: 1, rows: 9, columns: 8, atlasUrl: '/codex-pet/builtin-one/sheet.webp' },
+  { id: 'codex-v2', displayName: 'Codex 二号', source: 'codex', spriteVersionNumber: 2, rows: 11, columns: 8, atlasUrl: '/codex-pet/codex-v2/sheet.webp' },
+  { id: 'codex-v1', displayName: 'Codex 一号', source: 'codex', spriteVersionNumber: 1, rows: 9, columns: 8, atlasUrl: '/codex-pet/codex-v1/sheet.webp' },
+  { id: 'mine', displayName: '我的', source: 'user', spriteVersionNumber: 2, rows: 11, columns: 8, atlasUrl: '/codex-pet/mine/sheet.webp' },
+];
+
+test('groupPets keeps only the sources that actually have pets, in display order', () => {
+  const { groupPets } = mod.__internals;
+  assert.deepEqual(groupPets(GALLERY_PETS).map((group) => group.source), ['user', 'codex', 'builtin']);
+  assert.deepEqual(groupPets([GALLERY_PETS[1]]).map((group) => group.source), ['codex']);
+  // A pet without a source tag counts as built-in, so old registries still show.
+  assert.deepEqual(groupPets([{ id: 'old' }]).map((group) => group.source), ['builtin']);
+  assert.deepEqual(groupPets(undefined), []);
+});
+
+test('PetGallery lists every pet with its version badge and the Codex switch', () => {
+  const { PetGallery } = mod.__internals;
+  const html = renderToString(react.createElement(PetGallery, {
+    pets: GALLERY_PETS,
+    petId: 'codex-v2',
+    codexPets: { enabled: true },
+    codexPetsDir: 'C:\\Users\\me\\.codex\\pets',
+    post: () => {},
+  }));
+  assert.match(html, /读取本机 Codex 桌宠/, 'the switch is on screen');
+  assert.match(html, /type="checkbox"/);
+  assert.match(html, /我的桌宠（1）/);
+  assert.match(html, /Codex 桌宠（2）/);
+  assert.match(html, /内置桌宠（1）/);
+  assert.match(html, /读取到 2 个桌宠/, 'it reports how many Codex pets were found');
+  // v1 and v2 badges both appear; the selected card is marked.
+  assert.match(html, />v1</);
+  assert.match(html, />v2</);
+  assert.match(html, /✓ Codex 二号/);
+});
+
+test('PetGallery explains a switched-off source instead of listing nothing', () => {
+  const { PetGallery } = mod.__internals;
+  const html = renderToString(react.createElement(PetGallery, {
+    pets: [GALLERY_PETS[0], GALLERY_PETS[3]],
+    petId: 'mine',
+    codexPets: { enabled: false },
+    codexPetsDir: 'C:\\Users\\me\\.codex\\pets',
+    post: () => {},
+  }));
+  assert.match(html, /已关闭/);
+  assert.ok(!/Codex 桌宠（\d+）/.test(html), 'no Codex group while the source is off');
+});

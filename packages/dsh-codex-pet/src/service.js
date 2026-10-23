@@ -46,8 +46,7 @@ const DEFAULT_SUMMARY = {
 }
 
 /** Scenario voice defaults; volume is 0..100. */
-const DEFAULT_SOUND = {
-  enabled: true,
+const DEFAULT_SOUND = {  enabled: true,
   volume: 60,
   // Per-scenario switches and relative volume (final = master × track).
   tracks: {
@@ -55,6 +54,15 @@ const DEFAULT_SOUND = {
     error: { enabled: true, volume: 100 },
     interrupt: { enabled: true, volume: 100 },
   },
+}
+
+/**
+ * Pet sources the user can turn on and off. 'codexPets' reads the pets Codex
+ * desktop installed itself ('${CODEX_HOME:-~/.codex}/pets') straight off disk,
+ * in place, so they never have to be imported twice; it defaults to on.
+ */
+const DEFAULT_CODEX_PETS = {
+  enabled: true,
 }
 
 /** User-replaceable chime directory: '${DSH_HOME:-~/.dsh}/pets/sounds'. */
@@ -109,13 +117,22 @@ function sanitizeSound(raw) {
   }
 }
 
+/** Normalize the untrusted pet-source switches. */
+function sanitizeCodexPets(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  return { enabled: src.enabled !== false }
+}
+
 export function persistPath(env = process.env) {
   return join(dshHome(env), PERSIST_FILE)
 }
 
 export class PetService {
-  constructor({ registry, env = process.env, packageRoot }) {
+  constructor({ registry, loadPets, env = process.env, packageRoot }) {
     this.registry = registry
+    // Rebuilds the registry from the current pet-source switches; injected
+    // registries (tests) leave it out and keep their fixed entries.
+    this.loadPets = typeof loadPets === 'function' ? loadPets : null
     this.env = env ?? process.env
     this.file = persistPath(this.env)
     this.petsDir = userPetsDir(this.env)
@@ -135,14 +152,36 @@ export class PetService {
     // NOTE: keep the persisted snapshot off the name "state" — `state` is also
     // the read method, and an instance property would shadow it.
     this.persist = this.load()
-    if (!registry.byId(this.persist.petId)) {
-      const fallback = registry.defaultEntry()
-      this.persist.petId = fallback ? fallback.id : null
+    if (this.loadPets) this.reloadPets()
+    else this.ensurePetId()
+  }
+
+  /** Keep the selection pointing at a pet that actually exists. */
+  ensurePetId() {
+    if (this.registry.byId(this.persist.petId)) return
+    const fallback = this.registry.defaultEntry()
+    this.persist.petId = fallback ? fallback.id : null
+  }
+
+  /** Rebuild the registry from the current pet-source switches. */
+  reloadPets() {
+    if (!this.loadPets) {
+      this.ensurePetId()
+      return this.registry
     }
+    this.registry = this.loadPets(this.persist.codexPets.enabled !== false)
+    this.ensurePetId()
+    return this.registry
   }
 
   load() {
-    const base = { petId: null, display: { ...DEFAULT_DISPLAY }, summary: { ...DEFAULT_SUMMARY }, sound: { ...DEFAULT_SOUND } }
+    const base = {
+      petId: null,
+      display: { ...DEFAULT_DISPLAY },
+      summary: { ...DEFAULT_SUMMARY },
+      sound: { ...DEFAULT_SOUND },
+      codexPets: { ...DEFAULT_CODEX_PETS },
+    }
     if (!existsSync(this.file)) return base
     try {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8'))
@@ -151,6 +190,7 @@ export class PetService {
         display: { ...DEFAULT_DISPLAY, ...(parsed.display || {}) },
         summary: sanitizeSummary(parsed.summary),
         sound: sanitizeSound(parsed.sound),
+        codexPets: sanitizeCodexPets(parsed.codexPets),
       }
     } catch {
       return base
@@ -286,6 +326,8 @@ export class PetService {
       display: this.persist.display,
       summary: this.persist.summary,
       sound: this.persist.sound,
+      codexPets: { ...this.persist.codexPets },
+      codexPetsDir: this.registry.codexPetsDir ?? null,
       pet: entry ? petEntryView(entry) : null,
       pets: this.pets(),
       hasCustomSounds: {
@@ -323,6 +365,14 @@ export class PetService {
         : this.persist.sound.tracks
       this.persist.sound = sanitizeSound({ ...this.persist.sound, ...patch.sound, tracks })
     }
+    if (patch.codexPets && typeof patch.codexPets === 'object') {
+      const next = sanitizeCodexPets({ ...this.persist.codexPets, ...patch.codexPets })
+      const changed = next.enabled !== this.persist.codexPets.enabled
+      this.persist.codexPets = next
+      // Turning the source off can remove the selected pet, so the registry
+      // (and with it the selection fallback) is rebuilt right here.
+      if (changed) this.reloadPets()
+    }
     this.save()
     return this.state()
   }
@@ -355,15 +405,18 @@ export class PetService {
 
   /**
    * Restore every setting to its shipped default: display (position, size,
-   * pin, visibility, bubble, eye tracking), periodic summaries and the done
-   * chime. Configuration only — the selected pet id, any imported pet files
-   * and any uploaded chime files are deliberately kept.
+   * pin, visibility, bubble, eye tracking), periodic summaries, the done
+   * chime and the Codex pet source (back to on). Configuration only — the
+   * selected pet id, any imported pet files and any uploaded chime files are
+   * deliberately kept.
    */
   resetAll() {
     const rev = Number.isFinite(this.persist.display.layoutRev) ? this.persist.display.layoutRev : 0
     this.persist.display = { ...DEFAULT_DISPLAY, layoutRev: rev + 1 }
     this.persist.summary = sanitizeSummary(DEFAULT_SUMMARY)
     this.persist.sound = sanitizeSound(DEFAULT_SOUND)
+    this.persist.codexPets = { ...DEFAULT_CODEX_PETS }
+    this.reloadPets()
     this.save()
     return this.state()
   }

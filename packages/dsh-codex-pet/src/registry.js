@@ -44,6 +44,25 @@ export function userPetsDir(env = process.env, home = homedir()) {
   return join(dshHome(env, home), 'pets')
 }
 
+/** Codex home directory: $CODEX_HOME or ~/.codex. */
+export function codexHome(env = process.env, home = homedir()) {
+  const raw = env && env.CODEX_HOME
+  return raw && raw.trim() !== '' ? raw.trim() : join(home, '.codex')
+}
+
+/**
+ * The Codex pets directory: ${CODEX_HOME:-~/.codex}/pets. Codex stores every
+ * installed desktop pet there as '<pet>/pet.json' + '<pet>/spritesheet.webp',
+ * which is the very contract this plugin renders — so they can be used in
+ * place, without copying anything into ~/.dsh/pets.
+ */
+export function codexPetsDir(env = process.env, home = homedir()) {
+  return join(codexHome(env, home), 'pets')
+}
+
+/** Where a registry entry came from. */
+export const PET_SOURCES = ['builtin', 'codex', 'user']
+
 /**
  * Read image dimensions from a WebP/PNG/GIF header (no decode). Returns null
  * when the format is unrecognised. Ported from the codex-to-dsh-pet build.js.
@@ -119,7 +138,7 @@ function finiteInt(value, fallback, max) {
  * (with a warning recorded) when the manifest violates the contract.
  */
 export function resolvePetManifest(raw, dir, options = {}) {
-  const { assetPrefix = '/codex-pet', warnings = [] } = options
+  const { assetPrefix = '/codex-pet', warnings = [], source = 'builtin' } = options
   const warn = (message) => { warnings.push(message) }
   if (typeof raw !== 'object' || raw === null) {
     warn('manifest is not an object')
@@ -167,6 +186,7 @@ export function resolvePetManifest(raw, dir, options = {}) {
     spriteVersionNumber,
     size,
     pin,
+    source,
     cell: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
     columns: COLUMNS,
     rows: spriteVersionNumber === 2 ? 11 : 9,
@@ -205,26 +225,40 @@ function scanPetDir(dir, options) {
 }
 
 /**
- * Load the pet registry: built-in 'assets/*' first, then the user pets
- * directory (each later source overrides an earlier one on id collision).
+ * Load the pet registry: built-in 'assets/*' first, then the Codex pets
+ * directory (when enabled), then the user pets directory — each later source
+ * overrides an earlier one on an id collision. Codex pets are used in place,
+ * straight from '<codex home>/pets', so they stay in sync with Codex itself;
+ * the 'codexPets' switch simply leaves that source out.
  * Never throws on a bad manifest: it skips it and records a warning.
  */
 export function loadPetRegistry(options) {
-  const { packageRoot, assetPrefix = '/codex-pet', petsDir } = options
+  const {
+    packageRoot,
+    assetPrefix = '/codex-pet',
+    petsDir,
+    codexPetsDir: codexDir = codexPetsDir(),
+    codexPets = true,
+  } = options
   const warnings = []
   const byId = new Map()
-  for (const entry of scanPetDir(join(packageRoot, 'assets'), { assetPrefix, warnings })) {
-    if (!byId.has(entry.id)) byId.set(entry.id, entry)
+  const scan = (dir, source) => {
+    for (const entry of scanPetDir(dir, { assetPrefix, warnings, source })) {
+      if (byId.has(entry.id)) warnings.push(source + ' pet ' + entry.id + ' overrides the earlier one')
+      byId.set(entry.id, entry)
+    }
   }
-  const dir = petsDir !== undefined ? petsDir : userPetsDir()
-  for (const entry of scanPetDir(dir, { assetPrefix, warnings })) {
-    if (byId.has(entry.id)) warnings.push('user pet ' + entry.id + ' overrides the built-in one')
-    byId.set(entry.id, entry)
-  }
+  scan(join(packageRoot, 'assets'), 'builtin')
+  if (codexPets) scan(codexDir, 'codex')
+  scan(petsDir !== undefined ? petsDir : userPetsDir(), 'user')
   const entries = [...byId.values()]
   return {
     entries,
     warnings,
+    /** The Codex pets directory that was scanned (or would be). */
+    codexPetsDir: codexDir,
+    /** Whether Codex pets were included in this registry. */
+    codexPets: codexPets === true,
     byId: (id) => byId.get(id),
     defaultEntry: () => entries[0],
     /** Add (or replace) one entry at runtime — used by the GUI import flow. */
@@ -244,6 +278,7 @@ export function petEntryView(entry) {
     spriteVersionNumber: entry.spriteVersionNumber,
     size: entry.size,
     pin: entry.pin,
+    source: entry.source ?? 'builtin',
     cell: entry.cell,
     columns: entry.columns,
     rows: entry.rows,

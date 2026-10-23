@@ -1915,6 +1915,115 @@ window.__ModuleLoader__.load({
 			}, text);
 		}
 
+		// ---------------------------------------------------------------
+		// Pet gallery. Every renderable atlas becomes a thumbnail card, so a
+		// pet is picked by looking at it instead of by reading an id from a
+		// dropdown. Pets group by where they came from; Codex desktop keeps
+		// its own pets under '${CODEX_HOME:-~/.codex}/pets' and those are read
+		// in place (nothing is copied), which the "codexPets" switch controls.
+		// ---------------------------------------------------------------
+
+		const PET_SOURCE_TITLES = { user: "我的桌宠", codex: "Codex 桌宠", builtin: "内置桌宠" };
+		const PET_SOURCE_ORDER = ["user", "codex", "builtin"];
+
+		/** Group pets by source, dropping empty groups, in display order. */
+		function groupPets(pets) {
+			const list = Array.isArray(pets) ? pets : [];
+			const groups = [];
+			for (const source of PET_SOURCE_ORDER) {
+				const items = list.filter((pet) => pet && (pet.source || "builtin") === source);
+				if (items.length > 0) groups.push({ source, title: PET_SOURCE_TITLES[source] || source, items });
+			}
+			return groups;
+		}
+
+		/**
+		 * One atlas cell drawn as a thumbnail (row 0 / column 0 is the idle
+		 * frame of every pet). A full atlas is 1536x(1872|2288) — roughly 14 MB
+		 * of decoded pixels each — so the image is attached only while the card
+		 * is near the viewport and detached again once it scrolls away.
+		 */
+		function AtlasThumb({ pet, width = 52, height = 56 }) {
+			const ref = react.useRef(null);
+			const [shown, setShown] = react.useState(false);
+			react.useEffect(() => {
+				const el = ref.current;
+				if (!el || typeof IntersectionObserver === "undefined") { setShown(true); return undefined; }
+				const observer = new IntersectionObserver((entries) => {
+					for (const entry of entries) setShown(entry.isIntersecting);
+				}, { rootMargin: "300px" });
+				observer.observe(el);
+				return () => observer.disconnect();
+			}, [pet.id, pet.atlasUrl]);
+			const rows = pet.rows || (pet.spriteVersionNumber === 2 ? 11 : 9);
+			const columns = pet.columns || 8;
+			const url = shown && pet.atlasUrl ? 'url("' + String(pet.atlasUrl).replace(/"/g, '\\"') + '")' : "none";
+			return react.createElement("div", {
+				ref,
+				"aria-hidden": "true",
+				style: {
+					width, height, flex: "0 0 auto", borderRadius: "6px",
+					background: "rgba(128,128,128,0.14)",
+					backgroundImage: url,
+					backgroundSize: columns * 100 + "% " + rows * 100 + "%",
+					backgroundPosition: "0% 0%",
+					backgroundRepeat: "no-repeat",
+				},
+			});
+		}
+
+		/** The pet picker: source switch, discovery hint, thumbnail cards. */
+		function PetGallery({ pets, petId, codexPets, codexPetsDir, post }) {
+			const list = Array.isArray(pets) ? pets : [];
+			const groups = groupPets(list);
+			const codexEnabled = !codexPets || codexPets.enabled !== false;
+			const codexCount = list.filter((pet) => pet && pet.source === "codex").length;
+			const dir = codexPetsDir ? String(codexPetsDir) : "";
+			let hint;
+			if (!codexEnabled) hint = "已关闭：只显示内置与「我的桌宠」里的图集。重新打开即可再次读取 Codex 的桌宠。";
+			else if (codexCount > 0) hint = "已从 " + (dir || "Codex 桌宠目录") + " 读取到 " + codexCount + " 个桌宠（原地读取，不会复制文件）。";
+			else hint = "没有在 " + (dir || "Codex 桌宠目录") + " 找到桌宠；装好 Codex 桌宠后重开本页面即可看到。";
+			return react.createElement("div", { style: { display: "grid", gap: "10px" } },
+				checkboxField("读取本机 Codex 桌宠（默认开启）", codexEnabled,
+					(e) => post("/api/codex-pet/set-config", { codexPets: { enabled: e.target.checked } })),
+				react.createElement("div", { style: { fontSize: "12px", marginTop: "-4px", wordBreak: "break-all", color: codexEnabled ? "#9aa0a6" : "#e5a13b" } }, hint),
+				groups.map((group) => react.createElement("div", { key: group.source, style: { display: "grid", gap: "6px" } },
+					react.createElement("div", { style: { fontSize: "12px", color: "#9aa0a6" } }, group.title + "（" + group.items.length + "）"),
+					react.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(92px,1fr))", gap: "8px" } },
+						group.items.map((pet) => {
+							const selected = pet.id === petId;
+							const version = pet.spriteVersionNumber === 2 ? "v2" : "v1";
+							return react.createElement("button", {
+								key: pet.id,
+								type: "button",
+								title: (pet.description || pet.displayName || pet.id) + "（" + version + " 图集）",
+								onClick: () => { if (!selected) post("/api/codex-pet/set-pet", { petId: pet.id }); },
+								style: {
+									display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+									padding: "6px 4px", borderRadius: "8px", cursor: selected ? "default" : "pointer",
+									border: selected ? "1px solid #4c8dff" : "1px solid rgba(128,128,128,0.28)",
+									background: selected ? "rgba(76,141,255,0.14)" : "rgba(128,128,128,0.08)",
+									color: "inherit", font: "inherit", textAlign: "center",
+								},
+							},
+								react.createElement(AtlasThumb, { pet }),
+								react.createElement("span", {
+									style: { fontSize: "12px", lineHeight: 1.25, maxWidth: "88px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+								}, (selected ? "✓ " : "") + (pet.displayName || pet.id)),
+								react.createElement("span", {
+									style: {
+										fontSize: "10px", lineHeight: 1.2, padding: "0 5px", borderRadius: "999px",
+										color: version === "v2" ? "#8ab4ff" : "#9aa0a6",
+										border: "1px solid " + (version === "v2" ? "rgba(138,180,255,0.5)" : "rgba(128,128,128,0.4)"),
+									},
+								}, version),
+							);
+						}),
+					),
+				)),
+			);
+		}
+
 		// Periodic request-summary settings: cadence, model route (cheap models
 		// welcome - the summary is a tiny auxiliary call), bubble dwell time.
 		function SummaryControls({ summary, reload }) {
@@ -2183,11 +2292,13 @@ window.__ModuleLoader__.load({
 			};
 
 			return react.createElement("div", { style: { padding: "16px", display: "grid", gap: "14px", maxWidth: "440px" } },
-				field("宠物 Pet", react.createElement("select", {
-					value: state.petId ?? "",
-					style: { padding: "6px 8px" },
-					onChange: (e) => post("/api/codex-pet/set-pet", { petId: e.target.value }),
-				}, pets.map((p) => react.createElement("option", { key: p.id, value: p.id }, p.displayName || p.id)))),
+				field("宠物 Pet", react.createElement(PetGallery, {
+					pets,
+					petId: state.petId ?? "",
+					codexPets: state.codexPets,
+					codexPetsDir: state.codexPetsDir,
+					post,
+				})),
 				field("位置 Pin", react.createElement("select", {
 					value: v.pin ?? "bottom-right",
 					style: { padding: "6px 8px" },
@@ -2271,7 +2382,7 @@ window.__ModuleLoader__.load({
 		exports.deriveActivity = deriveActivity;
 		// Render-smoke hook: lets the node test suite mount the settings UI
 		// without a browser. The host reads only apply/inject.
-			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
+			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
 		return module.exports;
 	}
 });

@@ -8,7 +8,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { appendFileSync, mkdtempSync, existsSync, readdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PetService } from '../src/service.js'
@@ -499,4 +499,75 @@ test('summarizeRequests shares one in-flight generation for an identical range',
   assert.deepEqual(two, one)
   assert.equal(streams, 1)
   assert.equal(service.journalList('session-a').length, 1)
+})
+
+// ---------------------------------------------------------------
+// Codex pet source (the "读取本机 Codex 桌宠" switch).
+// ---------------------------------------------------------------
+
+const CODEX_ENTRY = {
+  ...PET_ENTRY,
+  id: 'ocho',
+  displayName: 'Ocho',
+  source: 'codex',
+  atlasUrl: '/codex-pet/ocho/spritesheet.webp',
+  manifestUrl: '/codex-pet/ocho/pet.json',
+}
+
+/** A registry double whose entries depend on the source switch. */
+function makeSourceRegistry(includeCodex) {
+  const entries = includeCodex ? [PET_ENTRY, CODEX_ENTRY] : [PET_ENTRY]
+  return {
+    entries,
+    byId: (id) => entries.find((entry) => entry.id === id),
+    defaultEntry: () => entries[0],
+    add() {},
+  }
+}
+
+test('the Codex pet source is on by default, switches off, and returns on reset', () => {
+  const home = mkdtempSync(join(tmpdir(), 'codex-pet-test-'))
+  const calls = []
+  const service = new PetService({
+    registry: makeSourceRegistry(true),
+    loadPets: (includeCodex) => {
+      calls.push(includeCodex)
+      return makeSourceRegistry(includeCodex)
+    },
+    env: { DSH_HOME: home },
+  })
+  assert.equal(service.state().codexPets.enabled, true, 'codex pets are read by default')
+  assert.deepEqual(service.state().pets.map((pet) => pet.id), ['nastya', 'ocho'])
+  assert.equal(service.state().pets[1].source, 'codex')
+
+  service.setPetId('ocho')
+  const off = service.setConfig({ codexPets: { enabled: false } })
+  assert.equal(off.codexPets.enabled, false)
+  assert.deepEqual(off.pets.map((pet) => pet.id), ['nastya'], 'the Codex pets disappear')
+  assert.equal(off.petId, 'nastya', 'a selection that vanished falls back to a real pet')
+  assert.deepEqual(calls, [true, false], 'the registry is rebuilt for the constructor and the toggle')
+
+  const back = service.resetAll()
+  assert.equal(back.codexPets.enabled, true, 'restoring defaults turns Codex pets back on')
+  assert.deepEqual(back.pets.map((pet) => pet.id), ['nastya', 'ocho'])
+  assert.equal(JSON.parse(readFileSync(join(home, 'codex-pet.json'), 'utf8')).codexPets.enabled, true)
+})
+
+test('a persisted off switch is honoured on startup', () => {
+  const home = mkdtempSync(join(tmpdir(), 'codex-pet-test-'))
+  writeFileSync(join(home, 'codex-pet.json'), JSON.stringify({ codexPets: { enabled: false } }))
+  const service = new PetService({
+    registry: makeSourceRegistry(true),
+    loadPets: (includeCodex) => makeSourceRegistry(includeCodex),
+    env: { DSH_HOME: home },
+  })
+  assert.equal(service.state().codexPets.enabled, false)
+  assert.deepEqual(service.state().pets.map((pet) => pet.id), ['nastya'])
+})
+
+test('an injected registry without a loader still exposes the switch', () => {
+  const service = makeService()
+  assert.equal(service.state().codexPets.enabled, true)
+  assert.equal(service.state().codexPetsDir, null)
+  assert.deepEqual(service.setConfig({ codexPets: { enabled: false } }).pets.map((pet) => pet.id), ['nastya'])
 })
