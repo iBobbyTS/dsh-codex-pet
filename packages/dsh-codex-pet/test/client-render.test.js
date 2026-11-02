@@ -212,41 +212,13 @@ test('automatic summary settlement updates the current tracker only', () => {
   assert.equal(settleAutoTrackerAfterSummary(failed, 'session-b', 61, true), failed, 'a stale session cannot alter the current tracker');
 });
 
-test('manual summary filters every request covered by persisted journal ranges', () => {
-  const { uncoveredModelRequestsOf } = mod.__internals;
-  const requests = [{ startSeq: 10 }, { startSeq: 20 }, { startSeq: 30 }, { startSeq: 40 }, { startSeq: 50 }];
-  const records = [{ fromRequestSeq: 10, toRequestSeq: 20 }, { fromRequestSeq: 40, toRequestSeq: 45 }];
-  assert.deepEqual(uncoveredModelRequestsOf(requests, records).map((request) => request.startSeq), [30, 50]);
-  assert.deepEqual(uncoveredModelRequestsOf([{ startSeq: 10 }], [{ fromRequestSeq: 1, toRequestSeq: 10 }]), [], 'zero uncovered requests need no analysis');
-});
-
-test('manual summary batches are capped by configured interval and server maximum', () => {
-  const { summaryBatches } = mod.__internals;
-  const requests = Array.from({ length: 103 }, (_, index) => ({ startSeq: index }));
-  assert.deepEqual(summaryBatches(requests, 3).map((batch) => batch.length), [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1]);
-  assert.deepEqual(summaryBatches(requests, 99).map((batch) => batch.length), [50, 50, 3]);
-});
-
-test('manual summary reads the summary config object and top-level response text', () => {
-  const { manualSummaryEnabled, summaryTextFromResponse } = mod.__internals;
-  assert.equal(manualSummaryEnabled({ enabled: true, provider: 'p', model: 'm' }), true);
-  assert.equal(manualSummaryEnabled({ enabled: true, provider: 'p', model: '' }), false);
-  assert.equal(manualSummaryEnabled({ summary: { enabled: true } }), false);
-  assert.equal(summaryTextFromResponse({ summary: 'completed work' }), 'completed work');
-  assert.equal(summaryTextFromResponse({ record: { summary: 'wrong response shape' } }), '');
-});
-
-test('manual summary ownership blocks and releases only its owning session', () => {
-  const {
-    manualSummaryBlocksSession,
-    releaseManualSummaryOwner,
-    releaseManualSummaryOwnerAfterSessionChange,
-  } = mod.__internals;
-
-  assert.equal(manualSummaryBlocksSession('session-a', 'session-a'), true, 'A blocks another manual start in A');
-  assert.equal(manualSummaryBlocksSession('session-a', 'session-b'), false, 'A does not block automatic work in B');
-  assert.equal(releaseManualSummaryOwnerAfterSessionChange('session-a', 'session-b'), null, 'switching to B releases stale A ownership');
-  assert.equal(releaseManualSummaryOwner('session-b', 'session-a'), 'session-b', 'late A completion cannot clear newer B ownership');
+test('automatic summary route requires enabled plus a provider and model', () => {
+  const { summaryRouteEnabled } = mod.__internals;
+  assert.equal(summaryRouteEnabled({ enabled: true, provider: 'p', model: 'm' }), true);
+  assert.equal(summaryRouteEnabled({ enabled: false, provider: 'p', model: 'm' }), false);
+  assert.equal(summaryRouteEnabled({ enabled: true, provider: 'p', model: '' }), false);
+  assert.equal(summaryRouteEnabled({ enabled: true, provider: '', model: 'm' }), false);
+  assert.equal(summaryRouteEnabled({ summary: { enabled: true } }), false);
 });
 
 test('SummaryControls requires a provider and model before enabling summaries', () => {
@@ -257,29 +229,6 @@ test('SummaryControls requires a provider and model before enabling summaries', 
   assert.ok(html.includes('disabled'), 'incomplete routes disable the enable checkbox');
   assert.ok(html.includes('Select provider and model first'), 'the route requirement is shown bilingually');
   assert.ok(!html.includes('自动（'), 'automatic route selection is not offered');
-});
-
-test('manual backfill advances the automatic summary cursor after each persisted batch', () => {
-  const { advanceAutoTrackerAfterManual } = mod.__internals;
-  const tracker = { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 70, windowStartRequestSeq: 11, retryCount: 2 };
-  advanceAutoTrackerAfterManual(tracker, 'session-a', [{ startSeq: 10 }, { startSeq: 30 }]);
-  assert.deepEqual(tracker, { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 70, windowStartRequestSeq: 31, retryCount: 2 });
-
-  advanceAutoTrackerAfterManual(tracker, 'session-a', [{ startSeq: 40 }, { startSeq: 50 }]);
-  assert.deepEqual(tracker, { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 70, windowStartRequestSeq: 51, retryCount: 2 });
-
-  // A later failed batch is not passed to the helper, so completed coverage remains advanced.
-  assert.equal(tracker.windowStartRequestSeq, 51, 'a later failed batch leaves the cursor after the last persisted batch');
-
-  advanceAutoTrackerAfterManual(tracker, 'session-a', [{ startSeq: 20 }]);
-  assert.equal(tracker.windowStartRequestSeq, 51, 'an older manual range never moves the cursor backward');
-
-  const newerManual = { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 10, windowStartRequestSeq: 11, retryCount: 0 };
-  advanceAutoTrackerAfterManual(newerManual, 'session-a', [{ startSeq: 30 }]);
-  assert.deepEqual(newerManual, { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 30, windowStartRequestSeq: 31, retryCount: 0 });
-
-  advanceAutoTrackerAfterManual(tracker, 'session-b', [{ startSeq: 100 }]);
-  assert.deepEqual(tracker, { sessionId: 'session-a', ready: true, lastSeenRequestSeq: 70, windowStartRequestSeq: 51, retryCount: 2 }, 'a session switch does not alter the current cursor');
 });
 
 test('SettingsSection renders its loading state without a host', () => {
@@ -620,4 +569,17 @@ test('pet position clamps to viewport, including a partly offscreen host and ove
     fakeWindow.innerWidth = savedWidth;
     fakeWindow.innerHeight = savedHeight;
   }
+});
+
+test('right click has only the optional hide action, without a legacy menu', () => {
+  assert.ok(!source.includes('codex-pet-menu'), 'menu CSS and DOM are removed');
+  for (const name of ['analyzeButton', 'journalButton', 'resetPosButton', 'menuRef', 'closeMenuRef', 'analyzeUncovered', 'onOutsideMenu']) {
+    assert.ok(!source.includes(name), name + ' should not survive the menu removal');
+  }
+  assert.match(source, /controller\.element\.addEventListener\("contextmenu", onContextMenu\)/);
+  assert.match(source, /event\.preventDefault\(\);\s*if \(!rightClickHideRef\.current\) return;/);
+  assert.match(source, /host\.style\.visibility = "hidden"/);
+  assert.match(source, /RIGHT_CLICK_HIDE_MS = 10_000/);
+  assert.match(source, /if \(ref\.current\) ref\.current\.style\.visibility = "visible"/);
+  assert.match(source, /checkboxField\("右键隐藏 10 秒"/);
 });

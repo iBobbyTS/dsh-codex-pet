@@ -11,7 +11,7 @@ This project is written with DSH — if you find any bugs or errors, please let 
 - Ready-to-use interactions: drag (runs in the direction of movement), hover to wave, double-click to jump, eyes follow the mouse (note: only Codex pet **v2** atlases — 11 rows — support eye tracking; the runtime plugin can turn this off in settings)
 - Reacts to the agent's live activity state and switches poses
 - **Progress bubble** above the pet while working (tool name / streaming text / "thinking…")
-- Runtime settings can independently hide the thinking placeholder and streamed output; optionally right-click to hide the pet for 10 seconds (replaces the context menu)
+- Runtime settings can independently hide the thinking placeholder and streamed output; optionally right-click to hide the pet for 10 seconds (the pet context menu has been removed)
 - Drags and viewport/container changes automatically clamp the pet inside visible bounds and persist corrected positions
 - Optional periodic **LLM summaries** of model-request progress, with a per-session journal (off by default)
 - **Done / error / interrupt** scenario voices — previewable and replaceable with your own audio
@@ -37,9 +37,9 @@ default, toggleable), and ships one example pet `nastya`
 > **「还原位置」** to send it back to its chosen corner, or **「还原全部设定」** to
 > restore every default at once (position, size, visibility, mouse tracking,
 > bubble, periodic summaries and sounds — **your pet choice, imported pets and
-> custom sounds are kept**). While the pet is still on screen you can also
-> right-click it and pick **「还原位置」** (unless the optional 10-second
-> right-click hide is enabled, which replaces the menu).
+> custom sounds are kept**). The pet has no right-click menu. Enable
+> **right-click hide for 10 seconds** in settings to temporarily conceal it;
+> use the settings page for restoring its position.
 
 **Install (once only, pick one):**
 

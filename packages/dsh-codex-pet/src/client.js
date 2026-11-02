@@ -607,56 +607,9 @@ window.__ModuleLoader__.load({
 			};
 		}
 
-		function requestCoveredByJournal(request, records) {
-			if (!request || !Number.isSafeInteger(request.startSeq)) return false;
-			return (records || []).some((record) => record && Number.isSafeInteger(record.fromRequestSeq)
-				&& Number.isSafeInteger(record.toRequestSeq) && request.startSeq >= record.fromRequestSeq && request.startSeq <= record.toRequestSeq);
-		}
-
-		/** Completed requests absent from every persisted journal range, ascending. */
-		function uncoveredModelRequestsOf(completedRequests, journalRecords) {
-			return (completedRequests || []).filter((request) => !requestCoveredByJournal(request, journalRecords)).slice().sort((a, b) => a.startSeq - b.startSeq);
-		}
-
-		/** Split manual work into server-safe, configured request batches. */
-		function summaryBatches(requests, intervalRequests) {
-			const size = Math.max(1, Math.min(50, Number.isFinite(Number(intervalRequests)) ? Math.floor(Number(intervalRequests)) : 5));
-			const batches = [];
-			for (let index = 0; index < (requests || []).length; index += size) batches.push(requests.slice(index, index + size));
-			return batches;
-		}
-
-		function manualSummaryEnabled(summary) {
+		/** An automatic summary needs an explicitly configured provider and model. */
+		function summaryRouteEnabled(summary) {
 			return !!summary && summary.enabled === true && !!summary.provider && !!summary.model;
-		}
-
-		function summaryTextFromResponse(data) {
-			return data && typeof data.summary === "string" ? data.summary : "";
-		}
-
-		function manualSummaryBlocksSession(ownerSessionId, sessionId) {
-			return ownerSessionId !== null && ownerSessionId === sessionId;
-		}
-
-		function releaseManualSummaryOwner(ownerSessionId, sessionId) {
-			return ownerSessionId === sessionId ? null : ownerSessionId;
-		}
-
-		function releaseManualSummaryOwnerAfterSessionChange(ownerSessionId, sessionId) {
-			return ownerSessionId !== null && ownerSessionId !== sessionId ? null : ownerSessionId;
-		}
-
-		/** Keep automatic work after successful manual coverage without skipping new requests. */
-		function advanceAutoTrackerAfterManual(tracker, sessionId, requests) {
-			if (!tracker || tracker.sessionId !== sessionId || !(requests && requests.length)) return tracker;
-			const lastRequestSeq = requests[requests.length - 1].startSeq;
-			if (!Number.isSafeInteger(lastRequestSeq)) return tracker;
-			const nextRequestSeq = lastRequestSeq + 1;
-			tracker.windowStartRequestSeq = tracker.windowStartRequestSeq == null
-				? nextRequestSeq
-				: Math.max(tracker.windowStartRequestSeq, nextRequestSeq);
-			tracker.lastSeenRequestSeq = Math.max(tracker.lastSeenRequestSeq, lastRequestSeq);
-			return tracker;
 		}
 
 		const BUBBLE_TEXT = {
@@ -750,10 +703,7 @@ window.__ModuleLoader__.load({
 			".codex-pet-journal-item:nth-child(odd){transform:translateX(-5px);border-radius:24px 16px 22px 20px}" +
 			".codex-pet-journal-item:nth-child(even){transform:translateX(7px)}" +
 			".codex-pet-journal-meta{display:flex;gap:6px;align-items:baseline;opacity:0.6;font-size:10.5px;margin-bottom:2px;white-space:nowrap}" +
-			".codex-pet-journal-empty{opacity:0.55;text-align:center;padding:14px 10px;font:12px/1.6 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;}" +
-			".codex-pet-menu{position:absolute;z-index:4;min-width:190px;padding:4px;background:var(--cp-bubble-bg,rgba(24,27,34,0.98));border:1px solid var(--cp-bubble-border,rgba(255,255,255,0.16));border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.35);font:12px/1.5 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;pointer-events:auto}" +
-			".codex-pet-menu button{display:block;width:100%;padding:7px 10px;border:0;border-radius:5px;background:transparent;color:var(--cp-bubble-color,#e7e9ee);font:inherit;text-align:left;cursor:pointer}" +
-			".codex-pet-menu button:hover{background:rgba(255,255,255,0.12)}";
+			".codex-pet-journal-empty{opacity:0.55;text-align:center;padding:14px 10px;font:12px/1.6 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;}";
 
 		function ensureBubbleStyle() {
 			try {
@@ -1005,10 +955,7 @@ window.__ModuleLoader__.load({
 			const summaryRevealTimerRef = react.useRef(0);
 			const journalRevealTimerRef = react.useRef(0);
 			const journalCacheRef = react.useRef({ sessionId: null, at: 0, items: null });
-			const menuRef = react.useRef(null);
 			const summaryRetryTimerRef = react.useRef(0);
-			const manualSummaryOwnerRef = react.useRef(null);
-			const closeMenuRef = react.useRef(() => {});
 			const activeAudioRef = react.useRef(new Set());
 			// Request window per selected session; journal history is intentionally not reused.
 			const trackerRef = react.useRef(baselineAutoTracker(null, []));
@@ -1049,7 +996,6 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => {
 				const sid = snap ? (snap.sessionId ?? null) : null;
 				if (activeSessionRef.current !== null && activeSessionRef.current !== sid) {
-					manualSummaryOwnerRef.current = releaseManualSummaryOwnerAfterSessionChange(manualSummaryOwnerRef.current, sid);
 					prevWorking.current = false;
 					stopMuteUntilRef.current = 0;
 					clearTimeout(doneTimerRef.current);
@@ -1060,7 +1006,6 @@ window.__ModuleLoader__.load({
 					clearTimeout(journalRevealTimerRef.current);
 					if (summaryBubbleRef.current) summaryBubbleRef.current.classList.remove("visible");
 					if (journalRef.current) journalRef.current.classList.remove("visible");
-					closeMenuRef.current();
 					journalCacheRef.current = { sessionId: null, at: 0, items: null };
 					stopActiveAudio();
 				}
@@ -1349,115 +1294,19 @@ window.__ModuleLoader__.load({
 					requestAnimationFrame(() => { journal.scrollTop = journal.scrollHeight; });
 				}
 				function closeJournal() { journal.classList.remove("visible"); }
-				const menu = document.createElement("div");
-				menu.className = "codex-pet-menu";
-				menu.style.display = "none";
-				applyBubbleTheme(menu, display.bubbleTheme ?? "gray", display.bubbleOpacity ?? 94);
-				const analyzeButton = document.createElement("button");
-				analyzeButton.type = "button";
-				analyzeButton.textContent = "分析此前未总结内容";
-				const journalButton = document.createElement("button");
-				journalButton.type = "button";
-				journalButton.textContent = "查看总结记录";
-				const resetPosButton = document.createElement("button");
-				resetPosButton.type = "button";
-				resetPosButton.textContent = "还原位置";
-				menu.append(analyzeButton, journalButton, resetPosButton);
-				host.appendChild(menu);
-				menuRef.current = menu;
-				const closeMenu = () => { menu.style.display = "none"; };
-				closeMenuRef.current = closeMenu;
-				const showManualMessage = (message) => { showSummaryBubble(message); };
-				const analyzeUncovered = async () => {
-					closeMenu();
-					const sessionId = activeSessionRef.current;
-					const summary = summaryStateRef.current;
-					if (!sessionId) return showManualMessage("没有可分析的会话");
-					if (!manualSummaryEnabled(summary)) return showManualMessage("自动总结未启用，无法分析此前内容");
-					if (manualSummaryBlocksSession(manualSummaryOwnerRef.current, sessionId) || summarizingRef.current) return showManualMessage("总结正在生成，请稍候");
-					const snapshot = snapshotRef.current;
-					const completed = completedModelRequestsOf(snapshot || {});
-					if (!completed.length) return showManualMessage("没有可分析的已完成请求");
-					let records;
-					try {
-						const response = await fetch("/api/codex-pet/journal?session=" + encodeURIComponent(sessionId) + "&all=1");
-						if (!response.ok) throw new Error("HTTP " + response.status);
-						const data = await response.json();
-						if (!data || !Array.isArray(data.records)) throw new Error("响应格式无效");
-						records = data.records;
-					} catch (error) {
-						return showManualMessage("总结记录加载失败：" + ((error && error.message) || "网络错误"));
-					}
-					if (activeSessionRef.current !== sessionId) return;
-					const uncovered = uncoveredModelRequestsOf(completed, records);
-					const batches = summaryBatches(uncovered, summary.intervalRequests);
-					if (!batches.length) return showManualMessage("此前没有未总结的内容");
-					if (!window.confirm("将分析 " + batches.reduce((count, batch) => count + batch.length, 0) + " 个未总结请求，分 " + batches.length + " 批调用模型，可能产生相应费用。继续吗？")) return;
-					manualSummaryOwnerRef.current = sessionId;
-					const summaries = [];
-					try {
-						for (const batch of batches) {
-							if (activeSessionRef.current !== sessionId) throw new Error("会话已切换，已停止分析");
-							const response = await fetch("/api/codex-pet/summarize", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(buildSummaryPayload((snapshotRef.current || {}).nodes, batch, sessionId)) });
-							const data = await response.json().catch(() => null);
-							if (!response.ok || !data || data.ok === false) throw new Error((data && data.error) || ("HTTP " + response.status));
-							advanceAutoTrackerAfterManual(trackerRef.current, sessionId, batch);
-							const text = summaryTextFromResponse(data);
-							if (text) summaries.push(text);
-						}
-						journalCacheRef.current = { sessionId: null, at: 0, items: null };
-						if (activeSessionRef.current === sessionId) {
-							showSummaryBubble(summaries.join("\n\n"));
-							openJournal();
-						}
-					} catch (error) {
-						if (activeSessionRef.current === sessionId) {
-							const message = (error && error.message) || "未知错误";
-							showManualMessage(message === "no-llm-service" ? "未连接可用的 LLM 服务，无法分析此前内容" : "总结失败，已停止：" + message);
-						}
-					} finally {
-						manualSummaryOwnerRef.current = releaseManualSummaryOwner(manualSummaryOwnerRef.current, sessionId);
-					}
-				};
 				const onContextMenu = (event) => {
 					event.preventDefault();
+					if (!rightClickHideRef.current) return;
 					closeJournal();
-					if (rightClickHideRef.current) {
-						closeMenu();
-						clearTimeout(hideTimerRef.current);
-						hiddenUntilRef.current = Date.now() + RIGHT_CLICK_HIDE_MS;
-						host.style.visibility = "hidden";
-						hideTimerRef.current = setTimeout(() => {
-							hiddenUntilRef.current = 0;
-							if (ref.current) ref.current.style.visibility = "visible";
-						}, RIGHT_CLICK_HIDE_MS);
-						return;
-					}
-					menu.style.display = "block";
-					menu.style.left = "0px";
-					menu.style.top = "0px";
-					const width = menu.offsetWidth;
-					const height = menu.offsetHeight;
-					const hostRect = host.getBoundingClientRect();
-					const maxLeft = Math.min(host.clientWidth - width - 4, window.innerWidth - width - 4 - hostRect.left);
-					const maxTop = Math.min(host.clientHeight - height - 4, window.innerHeight - height - 4 - hostRect.top);
-					const minLeft = Math.max(4, 4 - hostRect.left);
-					const minTop = Math.max(4, 4 - hostRect.top);
-					menu.style.left = Math.max(minLeft, Math.min(event.clientX - hostRect.left, maxLeft)) + "px";
-					menu.style.top = Math.max(minTop, Math.min(event.clientY - hostRect.top, maxTop)) + "px";
+					clearTimeout(hideTimerRef.current);
+					hiddenUntilRef.current = Date.now() + RIGHT_CLICK_HIDE_MS;
+					host.style.visibility = "hidden";
+					hideTimerRef.current = setTimeout(() => {
+						hiddenUntilRef.current = 0;
+						if (ref.current) ref.current.style.visibility = "visible";
+					}, RIGHT_CLICK_HIDE_MS);
 				};
-				const onOutsideMenu = (event) => { if (!menu.contains(event.target) && event.target !== controller.element) closeMenu(); };
-				const onMenuKeydown = (event) => { if (event.key === "Escape") closeMenu(); };
-				const onJournalButtonClick = () => { closeMenu(); openJournal(); };
-				// Ask the host to drop the dragged position; the state poll picks the
-				// new layout revision up and re-places the pet at its pin.
-				const onResetPosClick = () => { closeMenu(); postJson("/api/codex-pet/reset-position", {}); };
-				analyzeButton.addEventListener("click", analyzeUncovered);
-				journalButton.addEventListener("click", onJournalButtonClick);
-				resetPosButton.addEventListener("click", onResetPosClick);
 				controller.element.addEventListener("contextmenu", onContextMenu);
-				document.addEventListener("pointerdown", onOutsideMenu);
-				window.addEventListener("keydown", onMenuKeydown);
 				function scheduleCloseJournal() {
 					clearTimeout(journalHideTimerRef.current);
 					journalHideTimerRef.current = setTimeout(closeJournal, 280);
@@ -1492,7 +1341,6 @@ window.__ModuleLoader__.load({
 				const onDragDown = (event) => {
 					if (event.button !== 0) return;
 					petDragging = true;
-					closeMenu();
 				};
 				const releaseSync = () => {
 					if (!petDragging) return;
@@ -1513,8 +1361,6 @@ window.__ModuleLoader__.load({
 				controller.element.addEventListener("dblclick", onDoubleClick);
 
 				return () => {
-					closeMenuRef.current = () => {};
-					closeMenu();
 					window.removeEventListener("pointermove", look);
 					window.removeEventListener("pointermove", onBubbleMove);
 					window.removeEventListener("resize", onBubbleMove);
@@ -1526,11 +1372,6 @@ window.__ModuleLoader__.load({
 					controller.element.removeEventListener("pointerleave", onPetLeave);
 					controller.element.removeEventListener("pointerdown", onJournalDragHide);
 					controller.element.removeEventListener("contextmenu", onContextMenu);
-					analyzeButton.removeEventListener("click", analyzeUncovered);
-					journalButton.removeEventListener("click", onJournalButtonClick);
-					resetPosButton.removeEventListener("click", onResetPosClick);
-					document.removeEventListener("pointerdown", onOutsideMenu);
-					window.removeEventListener("keydown", onMenuKeydown);
 					journal.removeEventListener("pointerenter", onJournalEnter);
 					journal.removeEventListener("pointerleave", onJournalLeave);
 					controller.dispose();
@@ -1541,8 +1382,6 @@ window.__ModuleLoader__.load({
 					summaryBubbleRef.current = null;
 					if (journal) journal.remove();
 					journalRef.current = null;
-					if (menu) menu.remove();
-					menuRef.current = null;
 					clearTimeout(summaryHideTimerRef.current);
 					clearTimeout(journalHideTimerRef.current);
 					clearTimeout(bubbleRevealTimerRef.current);
@@ -1578,11 +1417,9 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => {
 				const b = bubbleRef.current;
 				const s = summaryBubbleRef.current;
-				const m = menuRef.current;
-				if (!b && !s && !m) return;
+				if (!b && !s) return;
 				if (b) applyBubbleTheme(b, bubbleThemeNow, bubbleOpacityNow);
 				if (s) applyBubbleTheme(s, bubbleThemeNow, bubbleOpacityNow);
-				if (m) applyBubbleTheme(m, bubbleThemeNow, bubbleOpacityNow);
 			}, [bubbleThemeNow, bubbleOpacityNow]);
 
 			// Task-finished chime: browsers require a prior user gesture before
@@ -1647,7 +1484,7 @@ window.__ModuleLoader__.load({
 				if (!snap) return;
 				const cfg = summaryStateRef.current;
 				const wasSessionChange = trackerRef.current.sessionId !== snap.sessionId;
-				if (!manualSummaryEnabled(cfg)) {
+				if (!summaryRouteEnabled(cfg)) {
 					if (wasSessionChange) {
 						trackerRef.current = awaitingOpenAutoTracker(snap.sessionId);
 						summarizingRef.current = false;
@@ -1663,7 +1500,7 @@ window.__ModuleLoader__.load({
 					snap.openState,
 					done,
 					interval,
-					summarizingRef.current || manualSummaryBlocksSession(manualSummaryOwnerRef.current, snap.sessionId),
+					summarizingRef.current,
 				);
 				trackerRef.current = selection.tracker;
 				if (wasSessionChange) {
@@ -2379,7 +2216,7 @@ window.__ModuleLoader__.load({
 				checkboxField("显示 Visible", !!v.visible, (e) => post("/api/codex-pet/set-visible", { visible: e.target.checked })),
 				checkboxField("显示思考提示 Thinking", v.showThinking !== false, (e) => post("/api/codex-pet/set-config", { showThinking: e.target.checked })),
 				checkboxField("显示模型输出 Output", v.showOutput !== false, (e) => post("/api/codex-pet/set-config", { showOutput: e.target.checked })),
-				checkboxField("右键隐藏 10 秒（启用后替代右键菜单）", v.rightClickHide === true, (e) => post("/api/codex-pet/set-config", { rightClickHide: e.target.checked })),
+				checkboxField("右键隐藏 10 秒", v.rightClickHide === true, (e) => post("/api/codex-pet/set-config", { rightClickHide: e.target.checked })),
 				checkboxField("鼠标视觉追踪 Eye tracking（仅 v2 图集）", v.mouseTracking !== false, (e) => post("/api/codex-pet/set-config", { mouseTracking: e.target.checked })),
 				react.createElement("div", { style: { color: selectedPetIsV2 ? "#9aa0a6" : "#e5a13b", fontSize: "12px", marginTop: "-6px" } },
 					selectedPetIsV2
@@ -2452,7 +2289,7 @@ window.__ModuleLoader__.load({
 		exports.deriveActivity = deriveActivity;
 		// Render-smoke hook: lets the node test suite mount the settings UI
 		// without a browser. The host reads only apply/inject.
-			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, clampPetPosition, bubbleContent, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
+			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, summaryRouteEnabled, pinPlacement, bubblePlacement, clampPetPosition, bubbleContent, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
 		return module.exports;
 	}
 });

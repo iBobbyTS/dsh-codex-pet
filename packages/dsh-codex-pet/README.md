@@ -27,13 +27,12 @@ plugin **once**, then add pets as plain data files — no per-pet code.
   conversation state.
 - Progress bubble showing the running tool name or the live model text tail.
 - Separate display switches for the thinking placeholder and streamed assistant output (default on).
-- Optional right-click to hide pet and all its bubbles for 10 seconds (default off, replaces the existing context menu).
+- Optional right-click to hide the pet and all its bubbles for 10 seconds (default off). The former context menu is removed entirely; disabled means no right-click action.
 - Visible viewport intersection clamping on drag, initial placement and resize; repaired saved positions persist automatically.
 - Optional fixed-interval first-person LLM summaries, with a per-session journal
   shown when hovering the pet. Automatic summaries observe only requests completed
-  after selecting a session; they do not backfill historical conversations. Right-
-  click the pet to explicitly analyze prior unsummarized requests. This is disabled
-  by default. Enabling it sends bounded excerpts of user, assistant, tool, and error
+  after selecting a session; they do not backfill historical conversations.
+  Enabling it sends bounded excerpts of user, assistant, tool, and error
   content to the selected LLM and incurs that provider's usage/cost. Select a
   provider and model before enabling summaries. Cadence and bubble duration
   are configurable.
@@ -197,8 +196,8 @@ src/
   «还原 Reset», and re-seats the pet in place whenever the host bumps
   `display.layoutRev` — a dragged `left`/`top` outranks the pin, so clearing it
   changes none of the fields the pet is recreated for.
-  Bubbles, the journal and the context menu are absolutely positioned with no
-  default coordinates, so the rule is **place first, show second**: a reveal
+  Bubbles and the journal are absolutely positioned with no default
+  coordinates, so the rule is **place first, show second**: a reveal
   reads the pet's live rect, falls back to the placement the controller recorded
   (`controller.box`, also used to seat the pet itself when a pin is empty or
   unknown), and otherwise keeps the element hidden while retrying every 100 ms
