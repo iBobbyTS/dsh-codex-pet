@@ -26,6 +26,9 @@ plugin **once**, then add pets as plain data files — no per-pet code.
 - Live activity poses: idle / waiting / running / review, driven by the
   conversation state.
 - Progress bubble showing the running tool name or the live model text tail.
+- Separate display switches for the thinking placeholder and streamed assistant output (default on).
+- Optional right-click to hide pet and all its bubbles for 10 seconds (default off, replaces the existing context menu).
+- Visible viewport intersection clamping on drag, initial placement and resize; repaired saved positions persist automatically.
 - Optional fixed-interval first-person LLM summaries, with a per-session journal
   shown when hovering the pet. Automatic summaries observe only requests completed
   after selecting a session; they do not backfill historical conversations. Right-

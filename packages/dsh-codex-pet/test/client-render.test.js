@@ -588,3 +588,36 @@ test('PetGallery explains a switched-off source instead of listing nothing', () 
   assert.match(html, /已关闭/);
   assert.ok(!/Codex 桌宠（\d+）/.test(html), 'no Codex group while the source is off');
 });
+
+test('progress text display toggles independently of tool status', () => {
+  const { bubbleContent } = mod.__internals;
+  const partial = { partial: { blocks: [{ kind: 'text', text: 'streaming answer' }] } };
+  const thinking = { partial: { blocks: [] } };
+  const tools = { runningCalls: [{ name: 'git status' }] };
+  assert.equal(bubbleContent(partial, 'review'), 'streaming answer');
+  assert.equal(bubbleContent(thinking, 'review'), '思考中…');
+  assert.equal(bubbleContent(partial, 'review', 140, { showOutput: false }), '');
+  assert.equal(bubbleContent(thinking, 'review', 140, { showThinking: false }), '');
+  assert.equal(bubbleContent(partial, 'review', 140, { showThinking: false }), 'streaming answer');
+  assert.equal(bubbleContent(thinking, 'review', 140, { showOutput: false }), '思考中…');
+  assert.equal(bubbleContent(tools, 'running', 140, { showOutput: false, showThinking: false }), '运行中：git status…');
+});
+
+test('pet position clamps to viewport, including a partly offscreen host and oversize sprites', () => {
+  const { clampPetPosition } = mod.__internals;
+  const savedWidth = fakeWindow.innerWidth, savedHeight = fakeWindow.innerHeight;
+  fakeWindow.innerWidth = 800;
+  fakeWindow.innerHeight = 600;
+  try {
+    const host = { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    assert.deepEqual(clampPetPosition({ x: 750, y: 580 }, host, 120, 130), { x: 674, y: 464 });
+    assert.deepEqual(clampPetPosition({ x: -40, y: -20 }, host, 120, 130), { x: 6, y: 6 });
+    assert.deepEqual(clampPetPosition({ x: 50, y: 50 }, host, 120, 130), { x: 50, y: 50 });
+    const clippedHost = { clientWidth: 900, clientHeight: 700, getBoundingClientRect: () => ({ left: -200, top: -100 }) };
+    assert.deepEqual(clampPetPosition({ x: 0, y: 0 }, clippedHost, 120, 130), { x: 206, y: 106 });
+    assert.deepEqual(clampPetPosition({ x: 700, y: 500 }, host, 1000, 900), { x: 6, y: 6 });
+  } finally {
+    fakeWindow.innerWidth = savedWidth;
+    fakeWindow.innerHeight = savedHeight;
+  }
+});

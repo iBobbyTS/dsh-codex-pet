@@ -33,6 +33,9 @@ const DEFAULT_DISPLAY = {
   // v2 atlases only: the pet's eyes track the pointer (the 16 "look" cells).
   // v1 atlases have no look cells, so this setting has no effect on them.
   mouseTracking: true,
+  showThinking: true,
+  showOutput: true,
+  rightClickHide: false,
 }
 
 /** Periodic request-summary defaults. A route must be selected before enabling. */
@@ -354,6 +357,9 @@ export class PetService {
     if (typeof patch.top === 'number') d.top = Math.max(0, Math.round(patch.top))
     if (typeof patch.visible === 'boolean') d.visible = patch.visible
     if (typeof patch.mouseTracking === 'boolean') d.mouseTracking = patch.mouseTracking
+    if (typeof patch.showThinking === 'boolean') d.showThinking = patch.showThinking
+    if (typeof patch.showOutput === 'boolean') d.showOutput = patch.showOutput
+    if (typeof patch.rightClickHide === 'boolean') d.rightClickHide = patch.rightClickHide
     if (typeof patch.bubbleTheme === 'string') d.bubbleTheme = patch.bubbleTheme
     if (typeof patch.bubbleOpacity === 'number') d.bubbleOpacity = Math.max(0, Math.min(100, Math.round(patch.bubbleOpacity)))
     if (patch.summary && typeof patch.summary === 'object') {
@@ -537,6 +543,9 @@ export class PetService {
     const d = this.persist.display
     if (typeof section.visible === 'boolean') d.visible = section.visible
     if (typeof section.mouseTracking === 'boolean') d.mouseTracking = section.mouseTracking
+    if (typeof section.showThinking === 'boolean') d.showThinking = section.showThinking
+    if (typeof section.showOutput === 'boolean') d.showOutput = section.showOutput
+    if (typeof section.rightClickHide === 'boolean') d.rightClickHide = section.rightClickHide
     if (typeof section.size === 'number') d.size = Math.max(32, Math.min(512, Math.round(section.size)))
     if (typeof section.pin === 'string') {
       if (d.pin !== section.pin) {

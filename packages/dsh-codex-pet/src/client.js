@@ -73,6 +73,33 @@ window.__ModuleLoader__.load({
 			return Math.round(normalized / 22.5) % 16;
 		}
 
+
+		const PET_POSITION_MARGIN = 6;
+		const RIGHT_CLICK_HIDE_MS = 10_000;
+
+		// Constrain the actual pet rectangle to the visible intersection of
+		// its positioning container and the viewport, as in dsh-git-commit.
+		// If the pet is larger than the viewport, its top-left stays reachable.
+		function clampPetPosition(position, container, width, height, margin = PET_POSITION_MARGIN) {
+			const rect = container && typeof container.getBoundingClientRect === "function"
+				? container.getBoundingClientRect() : { left: 0, top: 0 };
+			const cw = container && container.clientWidth > 0 ? container.clientWidth : window.innerWidth;
+			const ch = container && container.clientHeight > 0 ? container.clientHeight : window.innerHeight;
+			if (!(cw > 0 && ch > 0)) return position;
+			const vw = Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : cw;
+			const vh = Number.isFinite(window.innerHeight) && window.innerHeight > 0 ? window.innerHeight : ch;
+			const visibleLeft = Math.max(0, -(rect.left || 0));
+			const visibleTop = Math.max(0, -(rect.top || 0));
+			const visibleRight = Math.min(cw, vw - (rect.left || 0));
+			const visibleBottom = Math.min(ch, vh - (rect.top || 0));
+			if (visibleRight <= visibleLeft || visibleBottom <= visibleTop) return position;
+			const bounded = (n, min, max) => Math.max(min, Math.min(Math.max(min, max), n));
+			return {
+				x: bounded(position.x, visibleLeft + margin, visibleRight - width - margin),
+				y: bounded(position.y, visibleTop + margin, visibleBottom - height - margin),
+			};
+		}
+
 		function createCodexPet(container, options = {}) {
 			const version = options.spriteVersionNumber === 2 ? 2 : 1;
 			const rows = version === 2 ? 11 : 9;
@@ -185,26 +212,37 @@ window.__ModuleLoader__.load({
 				box = { left, top, width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale };
 			}
 
+			function applyPlacement(pos) {
+				el.style.left = pos.x + "px";
+				el.style.top = pos.y + "px";
+				setBox(pos.x, pos.y);
+			}
+
 			function place() {
 				if (dragging) return;
+				const w = FRAME_WIDTH * scale, h = FRAME_HEIGHT * scale;
 				if (options.position) {
-					el.style.left = `${options.position.x}px`;
-					el.style.top = `${options.position.y}px`;
-					setBox(options.position.x, options.position.y);
+					const bounded = clampPetPosition(options.position, container, w, h);
+					applyPlacement(bounded);
+					if (bounded.x !== options.position.x || bounded.y !== options.position.y) {
+						options.position = bounded;
+						if (options.onPositionClamped) options.onPositionClamped(bounded);
+					}
 					return;
 				}
-				// An empty or unknown pin still has to land somewhere sane: without
-				// one the pet itself would sit at the container origin.
 				const pin = PINS.indexOf(options.pin) >= 0 ? options.pin : DEFAULT_PIN;
-				const at = pinPlacement(pin, container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight, FRAME_WIDTH * scale, FRAME_HEIGHT * scale, 12);
-				el.style.left = `${at.left}px`;
-				el.style.top = `${at.top}px`;
-				setBox(at.left, at.top);
+				const at = pinPlacement(pin, container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight, w, h, 12);
+				applyPlacement(clampPetPosition({ x: at.left, y: at.top }, container, w, h));
 			}
 
 			place();
 			const onResize = () => place();
 			window.addEventListener("resize", onResize);
+			// Observe container changes even when the viewport size is unchanged.
+			const ResizeObserverClass = window.ResizeObserver;
+			const resizeObserver = typeof ResizeObserverClass === "function" ? new ResizeObserverClass(onResize) : null;
+			if (resizeObserver) resizeObserver.observe(container);
+			if (window.visualViewport && window.visualViewport.addEventListener) window.visualViewport.addEventListener("resize", onResize);
 
 			if (options.draggable !== false) {
 				const DRAG_RUN_THRESHOLD = 4;
@@ -237,27 +275,26 @@ window.__ModuleLoader__.load({
 						}
 					}
 					const pr = container.getBoundingClientRect();
-					const w = FRAME_WIDTH * scale;
-					const h = FRAME_HEIGHT * scale;
-					let x = e.clientX - pr.left - dragOffset.x;
-					let y = e.clientY - pr.top - dragOffset.y;
-					x = Math.max(0, Math.min(x, pr.width - w));
-					y = Math.max(0, Math.min(y, pr.height - h));
-					el.style.left = `${x}px`;
-					el.style.top = `${y}px`;
+					const bounded = clampPetPosition({
+						x: e.clientX - pr.left - dragOffset.x,
+						y: e.clientY - pr.top - dragOffset.y,
+					}, container, FRAME_WIDTH * scale, FRAME_HEIGHT * scale);
+					applyPlacement(bounded);
 				});
 				const endDrag = () => {
+					if (!dragging) return;
 					dragging = false;
 					el.style.cursor = "grab";
 					if (options.dragRun !== false && preDrag) {
 						setAnimation(preDrag.name, { mode: preDrag.mode, then: preDrag.then });
 						preDrag = null;
 					}
-					const x = parseFloat(el.style.left);
-					const y = parseFloat(el.style.top);
+					const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
 					if (Number.isFinite(x) && Number.isFinite(y)) {
-						options.position = { x, y };
-						if (options.onDragEnd) options.onDragEnd({ x, y });
+						const bounded = clampPetPosition({ x, y }, container, FRAME_WIDTH * scale, FRAME_HEIGHT * scale);
+						applyPlacement(bounded);
+						options.position = bounded;
+						if (options.onDragEnd) options.onDragEnd(bounded);
 					}
 				};
 				el.addEventListener("pointerup", endDrag);
@@ -309,7 +346,7 @@ window.__ModuleLoader__.load({
 					place(); paint(); return controller;
 				},
 				setPin(pin) { options.pin = pin; place(); return controller; },
-				setPosition(x, y) { el.style.left = `${x}px`; el.style.top = `${y}px`; setBox(x, y); return controller; },
+				setPosition(x, y) { const p = clampPetPosition({ x, y }, container, FRAME_WIDTH * scale, FRAME_HEIGHT * scale); options.position = p; applyPlacement(p); return controller; },
 				// Forget a dragged position so placement falls back to the pin again
 				// (the host's "restore position" button clears the saved left/top).
 				clearPosition() { options.position = undefined; place(); return controller; },
@@ -323,6 +360,8 @@ window.__ModuleLoader__.load({
 					disposed = true;
 					cancelAnimationFrame(rafId);
 					window.removeEventListener("resize", onResize);
+					if (resizeObserver) resizeObserver.disconnect();
+					if (window.visualViewport && window.visualViewport.removeEventListener) window.visualViewport.removeEventListener("resize", onResize);
 					el.remove();
 				},
 			};
@@ -626,7 +665,7 @@ window.__ModuleLoader__.load({
 			thinkingText: "思考中…",
 		};
 
-		function bubbleContent(snap, activity, maxChars = 140) {
+		function bubbleContent(snap, activity, maxChars = 140, display = {}) {
 			if (activity === "running") {
 				const tool = runningToolNameOf(snap);
 				if (tool) return BUBBLE_TEXT.runningText.replace("{tool}", tool);
@@ -634,8 +673,8 @@ window.__ModuleLoader__.load({
 			}
 			if (activity === "review") {
 				const t = partialTextOf(snap);
-				if (t) return liveTail(t, maxChars);
-				return BUBBLE_TEXT.thinkingText;
+				if (t) return display.showOutput === false ? "" : liveTail(t, maxChars);
+				return display.showThinking === false ? "" : BUBBLE_TEXT.thinkingText;
 			}
 			return "";
 		}
@@ -982,6 +1021,9 @@ window.__ModuleLoader__.load({
 			// Live eye-tracking switch (read by the pointermove handler below, so
 			// toggling it never rebuilds the pet). Applies to v2 atlases only.
 			const mouseTrackRef = react.useRef(true);
+			const rightClickHideRef = react.useRef(false);
+			const hiddenUntilRef = react.useRef(0);
+			const hideTimerRef = react.useRef(0);
 			const [state, setState] = react.useState(null);
 			const [summaryTick, setSummaryTick] = react.useState(0);
 
@@ -997,7 +1039,10 @@ window.__ModuleLoader__.load({
 			const activity = deriveActivity(snap);
 			activityRef.current = activity;
 			const showBubble = (activity === "running" || activity === "review");
-			const bubbleText = showBubble ? bubbleContent(snap, activity) : "";
+			const displayPrefs = (state && state.display) || {};
+			const rightClickHideNow = displayPrefs.rightClickHide === true;
+			rightClickHideRef.current = rightClickHideNow;
+			const bubbleText = showBubble ? bubbleContent(snap, activity, 140, displayPrefs) : "";
 
 			// Reset run-local flags before the activity and pulse effects consume a
 			// newly selected session.
@@ -1025,8 +1070,18 @@ window.__ModuleLoader__.load({
 			react.useEffect(() => () => {
 				clearTimeout(summaryRetryTimerRef.current);
 				clearTimeout(doneTimerRef.current);
+				clearTimeout(hideTimerRef.current);
 				stopActiveAudio();
 			}, []);
+
+
+			// Turning the option off while the pet is hidden reveals it immediately.
+			react.useEffect(() => {
+				if (rightClickHideNow || !hiddenUntilRef.current) return;
+				clearTimeout(hideTimerRef.current);
+				hiddenUntilRef.current = 0;
+				if (ref.current) ref.current.style.visibility = "visible";
+			}, [rightClickHideNow]);
 
 			// Poll the selected pet + display config so settings edits reflect live
 			// (the service writes them to the persisted file; this re-reads it).
@@ -1195,6 +1250,7 @@ window.__ModuleLoader__.load({
 					draggable: true,
 					jumpOnDoubleClick: false, // the overlay owns double-click (activity-aware restore)
 					onDragEnd: ({ x, y }) => { postJson("/api/codex-pet/set-config", { left: x, top: y }); },
+					onPositionClamped: ({ x, y }) => { postJson("/api/codex-pet/set-config", { left: x, top: y }); },
 				});
 				petRef.current = controller;
 				console.log("[dsh-codex-pet] ready —", pet.id);
@@ -1366,6 +1422,17 @@ window.__ModuleLoader__.load({
 				const onContextMenu = (event) => {
 					event.preventDefault();
 					closeJournal();
+					if (rightClickHideRef.current) {
+						closeMenu();
+						clearTimeout(hideTimerRef.current);
+						hiddenUntilRef.current = Date.now() + RIGHT_CLICK_HIDE_MS;
+						host.style.visibility = "hidden";
+						hideTimerRef.current = setTimeout(() => {
+							hiddenUntilRef.current = 0;
+							if (ref.current) ref.current.style.visibility = "visible";
+						}, RIGHT_CLICK_HIDE_MS);
+						return;
+					}
 					menu.style.display = "block";
 					menu.style.left = "0px";
 					menu.style.top = "0px";
@@ -2310,6 +2377,9 @@ window.__ModuleLoader__.load({
 					onCommit: (n) => post("/api/codex-pet/set-config", { size: n }),
 				})),
 				checkboxField("显示 Visible", !!v.visible, (e) => post("/api/codex-pet/set-visible", { visible: e.target.checked })),
+				checkboxField("显示思考提示 Thinking", v.showThinking !== false, (e) => post("/api/codex-pet/set-config", { showThinking: e.target.checked })),
+				checkboxField("显示模型输出 Output", v.showOutput !== false, (e) => post("/api/codex-pet/set-config", { showOutput: e.target.checked })),
+				checkboxField("右键隐藏 10 秒（启用后替代右键菜单）", v.rightClickHide === true, (e) => post("/api/codex-pet/set-config", { rightClickHide: e.target.checked })),
 				checkboxField("鼠标视觉追踪 Eye tracking（仅 v2 图集）", v.mouseTracking !== false, (e) => post("/api/codex-pet/set-config", { mouseTracking: e.target.checked })),
 				react.createElement("div", { style: { color: selectedPetIsV2 ? "#9aa0a6" : "#e5a13b", fontSize: "12px", marginTop: "-6px" } },
 					selectedPetIsV2
@@ -2382,7 +2452,7 @@ window.__ModuleLoader__.load({
 		exports.deriveActivity = deriveActivity;
 		// Render-smoke hook: lets the node test suite mount the settings UI
 		// without a browser. The host reads only apply/inject.
-			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
+			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, requestCoveredByJournal, uncoveredModelRequestsOf, summaryBatches, manualSummaryEnabled, summaryTextFromResponse, manualSummaryBlocksSession, releaseManualSummaryOwner, releaseManualSummaryOwnerAfterSessionChange, advanceAutoTrackerAfterManual, pinPlacement, bubblePlacement, clampPetPosition, bubbleContent, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
 		return module.exports;
 	}
 });
