@@ -33,8 +33,7 @@ const DEFAULT_DISPLAY = {
   // v2 atlases only: the pet's eyes track the pointer (the 16 "look" cells).
   // v1 atlases have no look cells, so this setting has no effect on them.
   mouseTracking: true,
-  showThinking: true,
-  showOutput: true,
+  showModelWork: true,
   rightClickHide: false,
 }
 
@@ -190,7 +189,16 @@ export class PetService {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8'))
       return {
         petId: typeof parsed.petId === 'string' ? parsed.petId : null,
-        display: { ...DEFAULT_DISPLAY, ...(parsed.display || {}) },
+        display: (() => {
+          const { showThinking, showOutput, ...display } = parsed.display || {}
+          return {
+            ...DEFAULT_DISPLAY,
+            ...display,
+            showModelWork: typeof display.showModelWork === 'boolean'
+              ? display.showModelWork
+              : showThinking !== false || showOutput !== false,
+          }
+        })(),
         summary: sanitizeSummary(parsed.summary),
         sound: sanitizeSound(parsed.sound),
         codexPets: sanitizeCodexPets(parsed.codexPets),
@@ -357,8 +365,7 @@ export class PetService {
     if (typeof patch.top === 'number') d.top = Math.max(0, Math.round(patch.top))
     if (typeof patch.visible === 'boolean') d.visible = patch.visible
     if (typeof patch.mouseTracking === 'boolean') d.mouseTracking = patch.mouseTracking
-    if (typeof patch.showThinking === 'boolean') d.showThinking = patch.showThinking
-    if (typeof patch.showOutput === 'boolean') d.showOutput = patch.showOutput
+    if (typeof patch.showModelWork === 'boolean') d.showModelWork = patch.showModelWork
     if (typeof patch.rightClickHide === 'boolean') d.rightClickHide = patch.rightClickHide
     if (typeof patch.bubbleTheme === 'string') d.bubbleTheme = patch.bubbleTheme
     if (typeof patch.bubbleOpacity === 'number') d.bubbleOpacity = Math.max(0, Math.min(100, Math.round(patch.bubbleOpacity)))
@@ -543,8 +550,7 @@ export class PetService {
     const d = this.persist.display
     if (typeof section.visible === 'boolean') d.visible = section.visible
     if (typeof section.mouseTracking === 'boolean') d.mouseTracking = section.mouseTracking
-    if (typeof section.showThinking === 'boolean') d.showThinking = section.showThinking
-    if (typeof section.showOutput === 'boolean') d.showOutput = section.showOutput
+    if (typeof section.showModelWork === 'boolean') d.showModelWork = section.showModelWork
     if (typeof section.rightClickHide === 'boolean') d.rightClickHide = section.rightClickHide
     if (typeof section.size === 'number') d.size = Math.max(32, Math.min(512, Math.round(section.size)))
     if (typeof section.pin === 'string') {

@@ -619,6 +619,7 @@ window.__ModuleLoader__.load({
 		};
 
 		function bubbleContent(snap, activity, maxChars = 140, display = {}) {
+			if (display.showModelWork === false) return "";
 			if (activity === "running") {
 				const tool = runningToolNameOf(snap);
 				if (tool) return BUBBLE_TEXT.runningText.replace("{tool}", tool);
@@ -626,8 +627,8 @@ window.__ModuleLoader__.load({
 			}
 			if (activity === "review") {
 				const t = partialTextOf(snap);
-				if (t) return display.showOutput === false ? "" : liveTail(t, maxChars);
-				return display.showThinking === false ? "" : BUBBLE_TEXT.thinkingText;
+				if (t) return liveTail(t, maxChars);
+				return BUBBLE_TEXT.thinkingText;
 			}
 			return "";
 		}
@@ -1057,6 +1058,11 @@ window.__ModuleLoader__.load({
 					tracks: snd.tracks || {},
 				};
 				summaryStateRef.current = (state && state.summary) || null;
+				if (summaryStateRef.current?.enabled !== true) {
+					clearTimeout(journalHideTimerRef.current);
+					clearTimeout(journalRevealTimerRef.current);
+					journalRef.current?.classList.remove("visible");
+				}
 
 				// Scenario pulses: the host stamps lifecycle events; play each new
 				// stamp's voice line exactly once (2 s poll cadence is fine — the
@@ -1268,6 +1274,7 @@ window.__ModuleLoader__.load({
 					}
 				}
 				function openJournal() {
+					if (summaryStateRef.current?.enabled !== true) return;
 					clearTimeout(journalHideTimerRef.current);
 					const sessionId = activeSessionRef.current;
 					if (!sessionId) { renderJournal(null); return; }
@@ -2214,8 +2221,7 @@ window.__ModuleLoader__.load({
 					onCommit: (n) => post("/api/codex-pet/set-config", { size: n }),
 				})),
 				checkboxField("显示 Visible", !!v.visible, (e) => post("/api/codex-pet/set-visible", { visible: e.target.checked })),
-				checkboxField("显示思考提示 Thinking", v.showThinking !== false, (e) => post("/api/codex-pet/set-config", { showThinking: e.target.checked })),
-				checkboxField("显示模型输出 Output", v.showOutput !== false, (e) => post("/api/codex-pet/set-config", { showOutput: e.target.checked })),
+				checkboxField("显示模型工作 Model work", v.showModelWork !== false, (e) => post("/api/codex-pet/set-config", { showModelWork: e.target.checked })),
 				checkboxField("右键隐藏 10 秒", v.rightClickHide === true, (e) => post("/api/codex-pet/set-config", { rightClickHide: e.target.checked })),
 				checkboxField("鼠标视觉追踪 Eye tracking（仅 v2 图集）", v.mouseTracking !== false, (e) => post("/api/codex-pet/set-config", { mouseTracking: e.target.checked })),
 				react.createElement("div", { style: { color: selectedPetIsV2 ? "#9aa0a6" : "#e5a13b", fontSize: "12px", marginTop: "-6px" } },

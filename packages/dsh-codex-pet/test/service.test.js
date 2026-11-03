@@ -576,17 +576,35 @@ test('progress and temporary-hide toggles persist and restore defaults', () => {
   const home = mkdtempSync(join(tmpdir(), 'codex-pet-test-'));
   const env = { DSH_HOME: home };
   const service = new PetService({ registry: makeRegistry(), env });
-  assert.equal(service.state().display.showThinking, true);
-  assert.equal(service.state().display.showOutput, true);
+  assert.equal(service.state().display.showModelWork, true);
   assert.equal(service.state().display.rightClickHide, false);
-  service.setConfig({ showThinking: false, showOutput: false, rightClickHide: true });
-  service.setConfig({ showThinking: 'wrong', showOutput: 0, rightClickHide: 'false' });
+  service.setConfig({ showModelWork: false, rightClickHide: true });
+  service.setConfig({ showModelWork: 'wrong', rightClickHide: 'false' });
   const restored = new PetService({ registry: makeRegistry(), env });
-  assert.equal(restored.state().display.showThinking, false);
-  assert.equal(restored.state().display.showOutput, false);
+  assert.equal(restored.state().display.showModelWork, false);
   assert.equal(restored.state().display.rightClickHide, true);
   restored.resetAll();
-  assert.equal(restored.state().display.showThinking, true);
-  assert.equal(restored.state().display.showOutput, true);
+  assert.equal(restored.state().display.showModelWork, true);
   assert.equal(restored.state().display.rightClickHide, false);
+  restored.applySettingsSection({ showModelWork: false });
+  assert.equal(restored.state().display.showModelWork, false);
+});
+
+test('legacy progress preferences migrate to model work with explicit new preference taking priority', () => {
+  for (const [display, expected] of [
+    [{ showThinking: false, showOutput: false }, false],
+    [{ showThinking: true, showOutput: false }, true],
+    [{ showThinking: false, showOutput: true }, true],
+    [{}, true],
+    [{ showThinking: false }, true],
+    [{ showModelWork: false, showThinking: true, showOutput: true }, false],
+    [{ showModelWork: true, showThinking: false, showOutput: false }, true],
+  ]) {
+    const service = makeService();
+    writeFileSync(service.file, JSON.stringify({ display }));
+    const migrated = service.load().display;
+    assert.equal(migrated.showModelWork, expected);
+    assert.ok(!('showThinking' in migrated));
+    assert.ok(!('showOutput' in migrated));
+  }
 });

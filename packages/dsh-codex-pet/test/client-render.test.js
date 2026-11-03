@@ -538,18 +538,48 @@ test('PetGallery explains a switched-off source instead of listing nothing', () 
   assert.ok(!/Codex 桌宠（\d+）/.test(html), 'no Codex group while the source is off');
 });
 
-test('progress text display toggles independently of tool status', () => {
+test('model work switch controls thinking, output and tool status together', () => {
   const { bubbleContent } = mod.__internals;
   const partial = { partial: { blocks: [{ kind: 'text', text: 'streaming answer' }] } };
   const thinking = { partial: { blocks: [] } };
   const tools = { runningCalls: [{ name: 'git status' }] };
   assert.equal(bubbleContent(partial, 'review'), 'streaming answer');
   assert.equal(bubbleContent(thinking, 'review'), '思考中…');
-  assert.equal(bubbleContent(partial, 'review', 140, { showOutput: false }), '');
-  assert.equal(bubbleContent(thinking, 'review', 140, { showThinking: false }), '');
-  assert.equal(bubbleContent(partial, 'review', 140, { showThinking: false }), 'streaming answer');
-  assert.equal(bubbleContent(thinking, 'review', 140, { showOutput: false }), '思考中…');
-  assert.equal(bubbleContent(tools, 'running', 140, { showOutput: false, showThinking: false }), '运行中：git status…');
+  assert.equal(bubbleContent(tools, 'running'), '运行中：git status…');
+  for (const [snap, activity, expected] of [
+    [partial, 'review', 'streaming answer'],
+    [thinking, 'review', '思考中…'],
+    [tools, 'running', '运行中：git status…'],
+    [{}, 'running', '工作中…'],
+  ]) {
+    assert.equal(bubbleContent(snap, activity, 140, { showModelWork: false }), '');
+    assert.equal(bubbleContent(snap, activity, 140, { showModelWork: true }), expected);
+  }
+  assert.match(source, /checkboxField\("显示模型工作 Model work"/);
+  assert.ok(!source.includes('显示思考提示 Thinking'));
+  assert.ok(!source.includes('显示模型输出 Output'));
+});
+
+test('journal hover follows summary enablement, including its empty placeholder', () => {
+  const body = source.split('function openJournal() {')[1].split('function closeJournal()')[0];
+  const summaryStateRef = { current: null };
+  let rendered = 0;
+  let timersCleared = 0;
+  const openJournal = new Function('summaryStateRef', 'journalHideTimerRef', 'activeSessionRef', 'clearTimeout', 'renderJournal',
+    'return function openJournal() {' + body)(
+      summaryStateRef, { current: 1 }, { current: null },
+      () => { timersCleared++; }, () => { rendered++; },
+    );
+  for (const summary of [null, {}, { enabled: false }]) {
+    summaryStateRef.current = summary;
+    openJournal();
+  }
+  assert.equal(rendered, 0, 'disabled summaries never render the empty placeholder');
+  assert.equal(timersCleared, 0, 'disabled hover returns before any journal work');
+  summaryStateRef.current = { enabled: true };
+  openJournal();
+  assert.equal(rendered, 1, 'enabled summary can show its empty placeholder');
+  assert.match(source, /if \(summaryStateRef\.current\?\.enabled !== true\) \{\s*clearTimeout\(journalHideTimerRef\.current\);\s*clearTimeout\(journalRevealTimerRef\.current\);\s*journalRef\.current\?\.classList\.remove\("visible"\)/);
 });
 
 test('pet position clamps to viewport, including a partly offscreen host and oversize sprites', () => {
