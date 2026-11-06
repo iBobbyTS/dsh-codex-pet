@@ -1,5 +1,4 @@
-/* 验证构建产物 lib/client.js 能在模拟 DSH 加载器下加载、注册、挂载。
- * 前置：先运行 `node build.js` 生成 lib/client.js。 */
+/* Verify the actual browser template without reading or generating user assets. */
 'use strict';
 
 function makeEl() {
@@ -37,7 +36,11 @@ const reactStub = {
 };
 const req = (id) => { if (id === 'react') return reactStub; throw new Error('unexpected require: ' + id); };
 
-require('./lib/client.js');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const template = fs.readFileSync(path.join(__dirname, 'lib/client.template.js'), 'utf8');
+vm.runInThisContext(template.replace('__CONFIG_JSON__', '{}').replace('__SPRITESHEET_DATA_URI__', 'data:image/png;base64,'));
 if (!loadedEntry) throw new Error('bundle did not register via __ModuleLoader__');
 console.log('module id:', loadedEntry.id);
 const mod = loadedEntry.factory(req);
@@ -55,11 +58,15 @@ const ctx = {
     register(o, c) { registerArgs = { options: o, component: c }; return () => {}; },
     inject(name, cb) { cb(); },
   },
-  sessions: {
-    currentProvideInfo: {
-      getSnapshot: () => ({ hooks: { session: { getSnapshot: () => sessionSnap, subscribe: () => () => {} } } }),
+  uiSession: {
+    adapter: { current: {
+      getSnapshot: () => ({ key: 'session-1', hooks: {
+        session: { getSnapshot: () => sessionSnap, subscribe: () => () => {} },
+        chat: { getSnapshot: () => ({ legacy: sessionSnap }), subscribe: () => () => {} },
+      } }),
       subscribe: () => () => {},
-    },
+    } },
+    sessionStatus: { getSnapshot: () => new Map(), subscribe: () => () => {} },
   },
 };
 mod.apply(ctx);
@@ -70,15 +77,27 @@ console.log('registered:', registerArgs.options.name, '/', registerArgs.options.
 function beginRender() { refIdx = 0; effectIdx = 0; effectStore = []; }
 function render() {
   beginRender();
-  const wrapped = registerArgs.component({ sessions: ctx.sessions });
+  const wrapped = registerArgs.component({});
   return wrapped.type(wrapped.props);
 }
 const el = render();
 console.log('component:', el.type, '/', el.props.className);
+const assert = require('node:assert/strict');
 const petBefore = createdEls.length;
 if (refStore[0]) refStore[0].current = makeEl();
 effectStore[0](); effectStore[1](); effectStore[2]();
 const petEl = createdEls[petBefore];
 console.log('pet mounted:', !!petEl, '| debug handle:', !!global.window.__pet);
+sessionSnap.running = true;
+sessionSnap.runningCalls = [{ name: 'read' }];
+render(); effectStore[1](); effectStore[2]();
+const bubble = createdEls.find(element => element.className === 'codex-to-dsh-pet-bubble');
+assert.ok(bubble.textContent.includes('read'), 'current chat tool reaches the bubble');
+assert.equal(bubble.style.display, 'block');
+sessionSnap.running = false;
+sessionSnap.runningCalls = [];
+render(); effectStore[1](); effectStore[2]();
+assert.equal(bubble.style.display, 'none', 'idle closes the working bubble');
+
 
 console.log('\nVERIFY OK');

@@ -334,3 +334,7 @@ Copy-Item "$profileDir\cordis.patch.yml.bak" "$profileDir\cordis.patch.yml" -For
 ## 致谢
 感谢@tuskinekinase 提供灵感和鼓励~
 特别感谢 **@yabo083** 贡献了「定期总结」与「场景提示音」功能（PR #4）。
+
+## DSH 0.2.2-rc.1
+
+The pet observes the current `uiSession` binding, Session status and Chat activity. `node verify-bundle.cjs` checks the template without user artwork. The root template exporter requires your spritesheet and `node build.js`; the check does not select artwork. The published runtime under `packages/dsh-codex-pet` already includes pet assets and does not require that exporter.

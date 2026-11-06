@@ -389,7 +389,7 @@ test('mergeConversationSnapshot folds the current host bindings into one snapsho
     turnEnds: new Map([[3, 21]]),
     nodes: [{ kind: 'assistant-step' }],
   };
-  const live = mergeConversationSnapshot(binding, emptyTrajectory, session, chat);
+  const live = mergeConversationSnapshot(binding, emptyTrajectory, session, { legacy: chat });
   assert.equal(live.partial.blocks[0].text, '正在写代码', 'the chat hook supplies the live text');
   assert.equal(deriveActivity(live), 'review', 'a streaming step with no tool call is the review pose');
   assert.equal(live.turnEnds.get(3), 21, 'chat turn ends stand in when trajectory has none');

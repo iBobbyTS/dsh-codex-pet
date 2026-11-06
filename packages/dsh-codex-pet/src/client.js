@@ -854,6 +854,8 @@ window.__ModuleLoader__.load({
 		 * the retired flat snapshot.
 		 */
 		function mergeConversationSnapshot(binding, live, session, chat) {
+			// Current ChatSnapshot keeps its flat tail under legacy.
+			chat = chat?.legacy ?? chat;
 			if (!binding && !live && !session && !chat) return null;
 			const projection = legacyProjectionOf(live);
 			// The live tail of the running step arrives on the `chat` hook —
@@ -891,7 +893,7 @@ window.__ModuleLoader__.load({
 				(cb) => (uiSessionSource ? uiSessionSource.subscribe(cb) : () => {}),
 				() => (uiSessionSource ? uiSessionSource.getSnapshot() : undefined),
 			);
-			const mainSource = uiSession && uiSession.current;
+			const mainSource = uiSession && (uiSession.adapter?.current ?? uiSession.current);
 			// Legacy host: the retired client-runtime bridge.
 			const provide = sessions && sessions.currentProvideInfo;
 
