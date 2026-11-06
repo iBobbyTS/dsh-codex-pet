@@ -1,340 +1,37 @@
-🌐 **中文** · [English](README.en.md)
+# dsh-codex-pet
 
-# codex-to-dsh-pet
+中文 · [English](README.en.md)
 
-![banner](banner.png)
+为 DSH Web UI 和 Desktop 渲染 Codex 桌宠图集。支持拖拽、活动姿势、进度气泡、导入宠物及读取本机 Codex 宠物；可选定期总结和完成/错误/中断提示音。
 
-把 **Codex 桌宠**（spritesheet 图集）移植为 **DeepSeek Harness（DSH）网页 GUI 桌宠**的通用框架 / 适配器。
-本项目系通过DSH编写，有问题和报错还请指正，我们会不断调试。
+本仓库是 [Signalight/codex-to-dsh-pet](https://github.com/Signalight/codex-to-dsh-pet) 的 fork。以下安装的是本 fork；运行时位于 `packages/dsh-codex-pet`，根目录另有可选的每宠插件导出工具。
 
-- 零依赖的核心渲染器（纯 DOM，无构建步骤）
-- 开箱即用的交互：拖拽（按方向奔跑）、悬停挥手、双击跳跃、眼睛跟随鼠标（请注意，只有 Codex 桌宠 v2 版本（11 行动作图片）才支持；运行时插件可在设置里关闭）
-- 实时响应 agent 活动状态，切换姿势
-- 工作时头顶弹出**进度气泡**（工具名 / 流式文本 / "思考中…"）
-- 运行时插件可分别关闭思考提示和流式输出；可在设置中启用右键点击桌宠后临时隐藏 10 秒（不再提供右键菜单）
-- 拖动和调整窗口尺寸后自动约束桌宠位置，超出视口的历史位置会被修正并保存
-- 可选**定期总结**：用所选 LLM 汇总模型请求进展，并带每个会话的总结记录面板（默认关闭）
-- **完成 / 错误 / 中断**三类**场景提示音**，可试听、可上传自定义音频
-- 逐行**尺寸归一化**，修正某些图集里姿势大小不一致的问题
+## 安装
 
-> ⚠️ 本框架（构建脚本）**不内置第三方桌宠素材**。随附的运行时插件内置一只
-> **示例桌宠 `nastya`（娜斯佳，原创角色，CC BY-NC 4.0）**，仅用于演示。
-> 内置**场景提示音**由贡献者用 Qwen3-TTS 生成、按 MIT 许可证提供，与示例角色分离
-> （角色图集仍为 CC BY-NC 4.0）；详见 [LEGAL.md](./LEGAL.md)。
+需要已安装 DSH、Node.js，以及 DSH 插件安装所需的 pnpm。从本 fork 获取代码：
 
-## 推荐：运行时插件（装一次 + 图形界面导入）
-
-`packages/dsh-codex-pet` 是一个**运行时插件**——装一次，之后在 DSH 设置里点按钮导入
-`.webp` 图集即可，**不用再跑命令行**。支持换宠、大小、位置、气泡颜色/透明度、
-鼠标视觉追踪（**仅 v2 图集**，默认开启，可关闭），并内置
-一只示例桌宠 `nastya`（娜斯佳，原创角色，CC BY-NC）。
-
-> 🧭 **防止越界：** 拖动、窗口缩放和尺寸变化后，桌宠位置会自动限制在可视区域并保存修正。
-> 如果仍想回到默认角落，打开
-> **设置 → 桌宠 → 还原 Reset**，点 **「还原位置」** 它就会回到所选角落；
-> 点 **「还原全部设定」** 则把位置、大小、显示、鼠标追踪、气泡、定期总结和提示音
-> 一次性恢复默认（**宠物选择与已导入的文件、自定义提示音会保留**）。
-> 桌宠不再弹出右键菜单；如需还原位置，请使用设置页的「还原位置」。启用「右键隐藏 10 秒」后，右键点击桌宠会临时隐藏它。
-
-**安装（仅一次，任选其一）：**
-
-**方式 A —— 一条命令（需要 pnpm）：**
-
-```powershell
-# 从 npm
-dsh plugin --profile web add @signalight/dsh-codex-pet
-
-# 或直接从 GitHub
-dsh plugin --profile web add github:Signalight/codex-to-dsh-pet#path:/packages/dsh-codex-pet
+```sh
+git clone https://github.com/iBobbyTS/dsh-codex-pet.git
+cd dsh-codex-pet
+dsh plugin --profile web add "$PWD/packages/dsh-codex-pet"
 ```
 
-**方式 B —— 脚本（无需 pnpm）：** 在解压出的 `codex-to-dsh-pet` 文件夹里打开 PowerShell（空白处 **Shift + 右键** → 在此处打开 PowerShell），运行：
+运行时直接使用源码和内置素材，无需运行根目录 `build.js`。Desktop 请在应用插件管理器中选择 `packages/dsh-codex-pet` 目录；`desktop` profile 由应用管理。Windows cmd 使用完整目录路径，不使用 `$PWD`。
 
-```powershell
-.\install-runtime.ps1
-```
+安装后重启 DSH Host 并刷新页面，在「设置 → 桌宠」选择或导入宠物。更新时更新本 checkout，并在同一 profile 重新添加同一目录；不要混装上游版本或每宠导出插件。
 
-装完后：DSH 会热加载 `cordis.patch.yml`，直接浏览器硬刷新 `http://127.0.0.1:3080`（Ctrl+Shift+R）即可；若仍未出现，再完全退出并重启 DSH 桌面应用（命令行版则重启 `dsh web`）。
+## 使用
 
-> ⚠️ **避免「重复 loader entry」导致 cordis 卡死**：同一个插件**只选一种方式装一次**
-> （方式 A 或 方式 B 二选一，别混用）。本仓库的 `install-runtime.ps1` /
-> `install-to-dsh.ps1` **幂等且自带去重**——重复安装只保留**恰好一条** `- insert:`
-> 条目，绝不会叠加，并会自动归并历史残留的重复行。
->
-> 若你之前**同时**用过「手动脚本」和「`dsh market` / `dsh plugin add`」两种方式，
-> `cordis.patch.yml` 里就可能出现同一条 `- insert:` 两次（DSH 启动会卡住）：
-> **重新跑一次 `install-runtime.ps1`** 即可自动归并回一条，然后浏览器硬刷新
-> （Ctrl+Shift+R），并按需要完全重启 DSH 桌面应用。
->
-> 想手动核对：打开 `~/.dsh/profiles/web/cordis.patch.yml`（桌面版为
-> `%APPDATA%\io.github.hairyf.deepseek-harness-desktop\data\dsh\profiles\web\cordis.patch.yml`），
-> 每个插件只应有一条 `- insert:`。注意 `select-pet.ps1` **只管理「旧式每宠插件」**，
-> 运行时插件（如 `@signalight/dsh-codex-pet`）由「设置 → 桌宠」管理，不会也不应由它改动。
+- 「显示模型工作」统一控制思考提示、流式文本和运行工具气泡。
+- Codex 宠物默认从 `~/.codex/pets` 读取，可用 `CODEX_HOME` 指定位置，也可在设置中关闭。
+- 定期总结默认关闭；启用后会将有限的会话片段发送给所选模型，并产生模型用量。
+- 「还原位置」修正位置；「还原全部设定」保留宠物选择、导入文件和自定义音频。
 
-**之后加桌宠（全图形界面）：** 打开 **设置 → 桌宠**，点 **导入桌宠**，选一张 `.webp`
-图集即可（可输入中文名，宠物 id 自动取自文件名；id 重复时自动加 `-2`/`-3` 后缀，
-不会覆盖之前导入的桌宠）。详见
-[packages/dsh-codex-pet/README.md](./packages/dsh-codex-pet/README.md)。
+## 文档
 
-> 📢 **给早期用户**：如果你之前用下面「旧方法」给每只桌宠单独装过插件，它们**仍然
-> 有效**，不会失效。想换到新方式：先跑一次上面的 `install-runtime.ps1` 装上运行时
-> 插件，之后新桌宠都用「设置 → 桌宠 → 导入」添加；旧的每宠插件可保留，也可先用
-> `.\select-pet.ps1` 停用，再手动删除 `profiles\node_modules\<宠物名>` 及补丁里的对应行。
+- [运行时设置、兼容与 API](docs/runtime.md)
+- [可选每宠导出工具](docs/exporter.md)
+- [开发约定](AGENTS.md) · [历史记录](docs/CHANGELOG.md)
+- [素材版权与许可](LEGAL.md) · [MIT 代码许可](LICENSE)
 
----
-
-## 旧方法：每宠构建一个插件（build.js）
-
-### 安装步骤（零基础，照着做就行）
-
-**开始前需要两样**：① 电脑装了 [Node.js](https://nodejs.org/)（运行 `node` 用）；② 已经装好、能跑起来的 DeepSeek Harness（DSH）。
-
-**第 1 步：拿到代码**
-
-- 点仓库页绿色 **Code → Download ZIP**，下载后**解压**，得到一个 `codex-to-dsh-pet` 文件夹；
-- 或命令行克隆：`git clone https://github.com/Signalight/codex-to-dsh-pet.git`
-
-**第 2 步：打开 PowerShell（位置要对）**
-
-1. 用文件资源管理器进入解压出来的 `codex-to-dsh-pet` 文件夹；
-2. 在文件夹**空白处**，按住 **Shift** 键 + **鼠标右键**；
-3. 菜单里选 **"在此处打开 PowerShell 窗口"**（Windows 11 可能是"在终端中打开"，一样）。
-
-窗口里光标前面显示着 `...\codex-to-dsh-pet`，就说明位置对了。
-
-**第 3 步：放图集**
-
-把桌宠图集（`.webp` 图片）**改名成你想叫的宠物名**（如 `nastya.webp`），**拖进** `codex-to-dsh-pet` 文件夹。
-
-**第 4 步：运行两条命令**
-
-在 PowerShell 窗口里依次输入下面两条，**每条输完按 Enter**：
-
-```powershell
-node build.js
-```
-
-```powershell
-.\install-to-dsh.ps1
-```
-
-看到 `Done.` 就成功了。
-
-**第 5 步：刷新生效**
-
-DSH 会热加载 `cordis.patch.yml`，直接在浏览器**硬刷新** `http://127.0.0.1:3080`（`Ctrl+Shift+R`），桌宠就出现在右下角了 🎉（桌面应用无需重启；若仍未出现，完全退出并重启桌面应用；命令行版则重启 `dsh web`。）
-
-> **常见报错**：
-> - 出现「禁止运行脚本」→ 先输入 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 回车（选 `Y`），再重跑第 4 步。
-> - 出现「`node` 不是内部或外部命令」→ 还没装 Node.js，去 [nodejs.org](https://nodejs.org/) 装一下。
-> - 装了多个桌宠后想切换，用 `.\select-pet.ps1`（见下文）。
-
----
-
-### 1. 准备素材
-
-把一张 Codex 桌宠的 spritesheet **命名成你的宠物名**（如 `fluffy.webp`）放进本目录。
-插件名会自动取自这个文件名——一张图集 = 一个插件。
-
-### 2. 配置（可选）
-
-`name` / `label` **不用填**（自动从图集文件名推导）。只有需要改尺寸、归一化、
-气泡文案等时才建 `config.json`：
-
-```powershell
-Copy-Item config.example.json config.json
-```
-
-`config.json` 字段（`name`/`label` 可省略，缺省取图集文件名）：
-
-| 字段 | 说明 | 默认 |
-|---|---|---|
-| `name` | 插件名（也是 node_modules 目录名 / 注册名） | **图集文件名** |
-| `label` | 悬浮层里显示的标签 | **图集文件名** |
-| `spritesheetPath` | 图集相对路径 | 自动检测 |
-| `spriteVersionNumber` | 图集版本：`1`（8×9）或 `2`（8×11，含注视帧） | **自动检测**（按图集尺寸 1872/2288） |
-| `size` | 显示宽度 px | `120` |
-| `pin` | 初始位置（`bottom-right` / `bottom-left` / …） | `bottom-right` |
-| `normalize` | 可选：逐行尺寸归一化 `[null, …, { s, cx, cy }, …]` | 无 |
-| `look.enabled` | 是否开启「眼睛跟随鼠标」；旧版桌宠（无注视帧）设为 `false` | `true` |
-| `look.deadzone` | 注视死区（px，指针距桌宠中心小于该值不触发） | `28` |
-| `bubble.enabled` | 是否显示进度气泡 | `true` |
-| `bubble.maxChars` | 流式文本截取长度 | `140` |
-| `bubble.runningText` | 工具运行时文案（`{tool}` 会被替换成工具名） | `运行中：{tool}…` |
-| `bubble.workingText` | 工作但无工具名时的文案 | `工作中…` |
-| `bubble.thinkingText` | 思考时的文案 | `思考中…` |
-
-> 💡 **版本自动识别**：build.js 会按图集尺寸自动判断 v1/v2——高 **1872px = v1**
-> （9 行，无注视帧，自动关闭鼠标追踪），高 **2288px = v2**（11 行，含 16 方向注视帧，
-> 自动开启鼠标追踪）。所以**一般不需要手动设 `spriteVersionNumber`**；只有当你的图集
-> 不是标准尺寸时，才需要在 `config.json` 里显式指定。
-
-### 3. 构建
-
-```powershell
-node build.js
-```
-
-会自动检测图集、从文件名推导宠物名，生成自包含的 `lib/client.js` 和
-`config.effective.json`。
-
-只想构建**指定的一张图集**时，可以用一步命令（写 `config.json` + 跑 `build.js`）：
-
-```powershell
-.\build-pet.ps1 nastya                                   # 名字与图集文件名一致
-.\build-pet.ps1 nastya -NodePath C:\path\to\node.exe     # 指定 node 路径（一般不用）
-```
-
-构建后可以运行冒烟测试验证产物：
-
-```powershell
-node verify-bundle.cjs
-```
-
-### 4. 安装到 DSH
-
-```powershell
-.\install-to-dsh.ps1
-```
-
-脚本会自动定位 DSH home，复制插件到 `<DSH home>/profiles/node_modules/<name>`，
-并注册到 `<DSH home>/profiles/web/cordis.patch.yml`（幂等、自动备份）。
-
-> **DSH home 定位**（`install-to-dsh.ps1` / `select-pet.ps1` 通用，按序探测）：
-> 1. `$env:DSH_HOME`（若已设置则优先）；
-> 2. `~/.dsh`（命令行版 dsh 的常规位置，存在才用）；
-> 3. `%APPDATA%\io.github.hairyf.deepseek-harness-desktop\data\dsh`
->    （DeepSeek Harness **桌面应用**的数据目录）。
->
-> 命令行版用户通常在 `~/.dsh`；桌面应用版用户通常在 `%APPDATA%\...\data\dsh`。
-> 注意：桌面应用**不会**把 `DSH_HOME` 导出到你的终端，脚本靠上面的探测自动找到。
-> 探测逻辑统一放在 `dsh-home.ps1`（install / select 脚本共用），想自定义改它即可。
-
-### 5. 刷新生效
-
-DSH 会热加载 `cordis.patch.yml`，直接在浏览器硬刷新 `http://127.0.0.1:3080`（`Ctrl+Shift+R`）即可，桌宠就出现在右下角了。桌面应用无需重启；若仍未出现，完全退出并重启桌面应用。命令行版用户可重启 `dsh web`：
-
-```powershell
-dsh web
-```
-
-### 6. 选择激活哪个桌宠（仅旧式每宠插件）
-
-`select-pet.ps1` 只管理**旧式每宠插件**（`build.js` 构建、位于 `node_modules` 顶层、
-只有 `dsh.client` 的插件）：
-
-```powershell
-.\select-pet.ps1          # 交互菜单：输入序号切换，q 保存退出
-.\select-pet.ps1 -List    # 只查看当前状态，不修改
-```
-
-它会扫描 `node_modules`（含 `@scope/` 子目录）里所有桌宠插件：旧式每宠插件可切换
-激活状态；scoped 运行时插件（如 `@signalight/dsh-codex-pet`）仅作为信息列出、**不会
-被本脚本改动**（其桌宠请在「设置 → 桌宠」里管理）。保存时只重写旧式每宠插件的
-`- insert:` 行，其余补丁条目一律保留（自动备份）。改完浏览器硬刷新即可生效。
-
-## 图集格式
-
-Codex 桌宠图集是固定布局的精灵图：
-
-| 项 | 值 |
-|---|---|
-| 帧尺寸 | 192 × 208 px |
-| 列数 | 8 |
-| v1 行数 | 9（1536 × 1872） |
-| v2 行数 | 11（1536 × 2288，第 9、10 行是 16 方向注视帧） |
-
-逐行动画（帧间隔 ms）：
-
-| 行 | 动画 | 帧数 | 间隔 |
-|---|---|---|---|
-| 0 | idle 待机 | 6 | 160 |
-| 1 | runningRight 向右跑 | 8 | 120 |
-| 2 | runningLeft 向左跑 | 8 | 120 |
-| 3 | waving 挥手 | 4 | 140 |
-| 4 | jumping 跳跃 | 5 | 140 |
-| 5 | failed 失败 | 8 | 140 |
-| 6 | waiting / sleeping 等待·睡觉 | 6 | 150 |
-| 7 | running 奔跑 | 6 | 120 |
-| 8 | review 审阅 | 6 | 150 |
-| 9–10 | look（16 方向注视） | 16 | — |
-
-## 目录结构
-
-```
-.
-├── config.example.json     # 示例配置
-├── build.js                # 内联图集 + 配置 → lib/client.js（名字取自图集文件名）
-├── verify-bundle.cjs       # 构建产物冒烟测试
-├── build-pet.ps1           # 一条命令构建指定桌宠（可选 -NodePath）
-├── dsh-home.ps1            # 共享的 DSH home 探测（install / select 共用）
-├── install-to-dsh.ps1      # 一键安装
-├── select-pet.ps1          # 选择激活哪个桌宠
-├── README.md               # 中文说明
-├── README.en.md            # English README
-├── lib/
-│   ├── index.js            # 宿主（Node）半身
-│   ├── client.template.js  # 浏览器半身源码模板
-│   └── client.js           # 构建产物（build.js 生成，已 gitignore）
-├── LEGAL.md                # 版权与许可说明
-└── LICENSE
-```
-
-## 回滚
-
-```powershell
-# 复用与安装脚本相同的 DSH home 探测（dsh-home.ps1）
-. .\dsh-home.ps1
-$profileDir = Join-Path (Get-DshHome) 'profiles\web'
-$nodeModules = Join-Path (Split-Path -Parent $profileDir) 'node_modules'
-
-Remove-Item -Recurse -Force (Join-Path $nodeModules '<name>')
-Copy-Item "$profileDir\cordis.patch.yml.bak" "$profileDir\cordis.patch.yml" -Force
-# 改完浏览器硬刷新即可（桌面应用会热加载；命令行版再重启 dsh web）
-```
-
-## 更新日志
-
-- **2026-10-23** 发布 **0.5.0**：**大改版——自动读取本机的 Codex 桌宠**。插件现在会扫描 `~/.codex/pets`（可用环境变量 `CODEX_HOME` 指向别处），把里面每一个 Codex 桌宠（`pet.json` + `spritesheet.webp`）**原地**读进选宠列表，不复制、不搬家；设置 → 桌宠 里的下拉框换成**带缩略图的选择面板**，按「我的桌宠 / Codex 桌宠 / 内置桌宠」分组，每只都标出 **v1 / v2**，并按图集实际尺寸渲染（1536×1872 = v1 九行；1536×2288 = v2 十一行）。面板顶部新增开关 **「读取本机 Codex 桌宠（默认开启）」**，关掉后只显示内置与「我的桌宠」里的图集；「还原全部设定」会把它恢复为开启。缩略图只在卡片接近视口时才加载（每张图集解码后约 14 MB），滚开即卸载，设置页不会变卡。同名宠物按 **我的桌宠 > Codex 桌宠 > 内置桌宠** 的顺序覆盖（所以 Codex 目录里的 `nastya` 会盖掉内置示例）。新增 `test/registry.test.js` 与 6 个用例，共 74 项测试通过。
-- **2026-10-23** 发布 **0.4.2**：修复**定期总结总说桌宠在「空转」**的问题——每五次请求生成的那条总结反复声称「这批请求没有动作、没有工具调用、记录是空的、像在空转」。根因不在总结模型，而在喂给它的数据：0.3.3 起插件从 `hooks.trajectory` 的 `eventNodes` 重建会话节点时，按 `{ data: { kind, node } }` 这种**带包装**的形状去读，而 `dsh-client-ui-trajectory` 的快照是把**最终节点本身**直接放进 `eventNodes`（`{ kind: "user" | "assistant" | "tool-result", seq, turn, step, blocks, … }`，工具调用就是 `blocks` 里的 `{ kind: "tool-call", name, argsRaw, callId }`）。于是节点数组恒为空，总结请求里既没有用户指令、也没有回复文字、更没有工具调用——模型只能如实回答「看起来什么都没有」。现在两种形状都接受（优先直读节点，包装形状保留为回退）。顺带修好一个同源的静默问题：**「遇到错误」场景语音与「完成」提示音的判定**依赖 `turn-error` 节点，而 0.2 线不发这种节点，改为由 `requests` 里**每一轮最新那次请求失败**合成（重试成功的轮次不会被误判）。桌宠气泡文字不受影响（它读的是 `partial`，一直正常）。新增 3 个单元测试（直读最终节点、端到端总结载荷、`turn-error` 合成）。
-- **2026-10-07** 发布 **0.4.1**：修复「从**设置**面板返回后，桌宠的总结偶尔闪在屏幕**左上角**」的问题。根因：气泡、总结记录与右键菜单在 CSS 里都是绝对定位、**没有任何默认位置**，坐标全靠「显示之前先按桌宠当前位置算一次」；而**离开设置面板**会让桌宠所在的宿主层重建，在这个瞬间桌宠的实时位置读不到，旧代码却仍然把气泡置为可见，于是它就以「从未被定位」的状态停在宿主原点——也就是屏幕左上角。现在改为**先定位、再显示**：几何优先取桌宠的实时位置，取不到时回退到宠物控制器记录的上一次落位；两者都没有就**保持隐藏并每 100ms 重试（最多 1.2 秒）**，宁可晚一点出现，也绝不闪到角落。同时修掉同类隐患：九宫格「位置」为空或取值不认识时，桌宠**自己**也会停在左上角，现在一律回退到「右下」。新增 4 个单元测试覆盖这两条落位规则。
-- **2026-10-03** 发布 **0.4.0**：新增两个**还原**按钮，解决「调整桌面分辨率后桌宠跑到屏幕外、再也拖不回来」的问题。根因：拖拽后的位置以 `left`/`top` 持久化，而它**优先于**「位置（九宫格）」设置，所以分辨率一变，桌宠就停在视口之外。现在打开 **设置 → 桌宠 → 还原 Reset**，点 **「还原位置」** 即清掉已保存的拖拽坐标、交回九宫格摆位（桌宠还在屏幕内时也可**右键点它**选「还原位置」）；点 **「还原全部设定」** 则把位置、大小、显示开关、鼠标追踪、气泡颜色/透明度、定期总结与场景提示音一次性恢复默认，**宠物选择、已导入的宠物文件与自定义提示音都会保留**（点击前有二次确认）。因为浏览器端只在「换宠 / 显隐 / 大小 / 位置」变化时才重建桌宠，而清掉 `left`/`top` 不改动这些字段，故新增 `display.layoutRev`：主机每次重排自增一次，浏览器端据此**原地**重新落位（不重建、不闪烁）。对应新接口 `POST /api/codex-pet/reset-position` 与 `POST /api/codex-pet/reset-all`。
-- **2026-09-29** 发布 **0.3.4**：修复 **0.3.3 在 DSH 0.2.0-rc.1 下「思考中…」能出现、却看不到模型实时输出文字** 的问题。根因：0.2 线把会话内容拆成多个 target，**流式 step 的实时 tail（`partial.blocks`）挂在 `chat` target 上**，由 `dsh-client-ui-chat` 通过 `ctx.uiSession.provide({ hooks: ['chat'], … })` 暴露；0.3.3 只读了 `hooks.trajectory`，而 trajectory 自己的 `partial` 要等它的 target 累积到 chunk 才有值，于是实时文字恒为空——运行 / 待处理状态仍来自 `hooks.session`，所以「思考中…」看起来是正常的。现在气泡文字与工具名**优先读 `hooks.chat`**，`hooks.trajectory` 退为回退；`turnEnds` 同时接受 chat 的 `Map<turn, seq>` 形态。0.1.x 与 0.2.0-rc.1+ 的行为保持一致。
-- **2026-09-29** **0.3.3**（未单独发布到 npm，其修复已随 **0.3.4** 发布）：修复桌宠**气泡不再显示「思考中…」与模型实时输出文字**的问题（DSH **0.2.0-rc.1** 起）。根因与 0.3.2 同源、机制不同：0.1.x 时代插件通过 `sessions.currentProvideInfo` 读取会话快照，该桥随 `@deepseek-ai/dsh-client-runtime` 一起在 0.2 线被移除，于是快照恒为 `null`、活动状态恒为 `idle`，气泡永不出现（连「运行中：工具名」也没有，桌宠也不再进入 running/waiting 姿势）。现在改为读取 0.2 内部 `uiSession` 服务的**主绑定**：`hooks.trajectory` 提供实时 tail（`partial` / `runningCalls`，也就是气泡文字与工具名），`hooks.session` 提供运行 / 待处理 / 打开状态，并从 trajectory 事件节点重建 `nodes` / `turnEnds` / `requests`（完成提示音与定期总结随之恢复）。为兼容旧宿主，`uiSession` **不写进 `inject`**（缺失的硬依赖会让整个插件被 Cordis park），改用 `ctx.get('uiSession')` 惰性查找 + 短暂轮询订阅；查不到时自动回退旧的 `currentProvideInfo` 路径，因此 **0.1.x 与 0.2.0-rc.1+ 共用同一份代码**。
-- **2026-09-29** 发布 **0.3.2**：修复与 DSH **0.2.0-rc.1** 及以后版本不兼容、插件被启动门禁**整行禁用**（桌宠、「设置 → 桌宠」整块消失）的问题。根因：插件在 `package.json` 里把 `@deepseek-ai/dsh-client-runtime` 声明为 `peerDependencies`（`^0.1.0-rc.6`），而 DSH 0.2 线已把该包拆分/下线；DSH 会用它自己的版本去校验插件的每个 `@deepseek-ai/dsh*` peer，不满足即禁用整个插件行（报 `Plugin … is incompatible with dsh …: peerDependencies …`）。现在改为只声明**确实存在且确实在用**的 DSH 包，并放宽为开放区间：`@deepseek-ai/dsh-client-ui-slots` / `@deepseek-ai/dsh-host-webserver`（均为 `>=0.1.0-rc.6`），因此 **0.1.x 与 0.2.0-rc.1+ 都能通过**；同时补上 `dsh.manifestVersion: 1`，并把 `dsh.client.inject` 从已废弃的包名改为 `@deepseek-ai/dsh-client-ui-slots`。若你暂时不方便升级，也可用 `dsh plugin --profile web allow-version` 为旧版本单独放行。
-- **2026-08-27** 发布 **0.3.1**：修复（issue #8）桌宠被侧边栏/面板遮挡的问题。桌宠宿主层改用 **React portal 挂到最顶层 `document.body`**（`position:fixed` + 极高 `z-index`），使桌宠（及气泡/菜单/总结面板）始终显示在侧边栏、面板**之上**；宿主层仍为 `pointer-events:none`，不会挡住其它操作。
-- **2026-08-25** 新增：安装脚本 `install-runtime.ps1` / `install-to-dsh.ps1` 改为**幂等 + 自动去重**（新增共享模块 `cordis-patch.ps1`），确保同一个插件在 `cordis.patch.yml` 里**恰好一条** `- insert:` 条目——避免重复安装（例如手动脚本与 `dsh market` 混用）产生重复 loader entry 导致 cordis 卡死；README 同步增加防坑说明。
-
-- **2026-08-25** 合并贡献者 **@yabo083** 的 PR #4：运行时插件新增「定期总结」（用所选 LLM 汇总模型请求进展，含设置项与总结记录面板，默认关闭）与「完成 / 错误 / 中断」三类**场景提示音**（默认开启、可试听、可上传自定义音频）。提示音的权利归属与许可见「许可与版权」节。版本升至 **0.3.0**。
-- **2026-08-24** 运行时插件新增「鼠标视觉追踪」开关（设置 → 桌宠）：v2 图集的视线是否跟随鼠标，可在界面里自行选择，**默认开启**；界面会提示此功能**仅 v2 图集可用**（v1 无注视帧，设置不生效）。该项以服务端 `mouseTracking` 配置持久化。
-- **2026-08-18** 修复（issue #3）：`select-pet.ps1` 现在也会扫描 scoped（`@scope/`）目录，运行时插件可见但仅展示、绝不改动；旧式每宠插件切换只重写自己的补丁行，其余条目一律保留（避免静默删除运行时插件等第三方条目）；`install-to-dsh.ps1` / `install-runtime.ps1` 与 README 的重启指引改为「热加载 + 硬刷新」，桌面应用无需也无法手动重启 `dsh web`。
-- **2026-08-17** 修复（0.1.2）：导入新桌宠不再覆盖旧桌宠。此前桌宠 id 取自文件名，而 Codex 图集都叫 `spritesheet.webp`，导致第二次导入会覆盖第一次导入的文件夹；现在 id 冲突时自动追加 `-2`、`-3` 后缀，只有「同名同 id」的重复导入才原地更新（用于替换修复后的图集）。
-- **2026-08-17** 新增运行时插件 `packages/dsh-codex-pet`：装一次即可，图形界面导入桌宠（webp/png/gif）、换宠 / 大小 / 位置 / 气泡颜色与透明度；示例桌宠改用原创角色 **nastya（娜斯佳）**，按 **CC BY-NC 4.0** 授权（详见 LEGAL.md）。
-- **2026-08-17** 新增：英文版说明（`README.en.md`），README 顶部增加中/英切换链接；并给 GitHub 仓库添加了简介（description）与标签（topics，含 `dsh-plugin`）。
-- **2026-08-17** 文档：示例宠物名不再使用游戏角色名 `anaxa`，改用原创角色 `nastya`。
-- **2026-08-17** 重构：DSH home 探测抽到共享的 `dsh-home.ps1`（install / select 脚本与 README 回滚代码统一引用）；`build-pet.ps1` 新增 `-NodePath` 参数，不再依赖作者本机路径；`select-pet.ps1` 保存时保留注释位置与非桌宠补丁条目，与 `install-to-dsh.ps1` 行为一致。
-- **2026-08-16** 修复：`build.js` 自动检测忽略仓库自带的 `banner.png`（此前必报「多张图集」）；`install-to-dsh.ps1` / `select-pet.ps1` 支持 `DSH_HOME` 三级探测（`$env:DSH_HOME` → `~/.dsh` → 桌面应用 `%APPDATA%\...\data\dsh`）；`install-to-dsh.ps1` 写补丁时丢弃 `[]` 占位符，修复生成的 `cordis.patch.yml` 为非法 YAML 的问题。
-- **2026-08-16** 修复多桌宠同时加载报错（模板顶层 `const` 用 IIFE 包裹），现在可同时开启多个桌宠。
-- **2026-08-16** `build.js` 按图集尺寸自动识别 v1/v2（高 1872px=v1、2288px=v2），v2 自动开启鼠标追踪，无需手填 `spriteVersionNumber`。
-- **2026-08-16** 图集文件名自动推导宠物名（一张图集 = 一个插件）；`spritesheetPath` 过期时自动回退；新增 `select-pet.ps1` 切换激活。
-- **2026-08-15** 修复安装脚本的 UTF-8 编码与目录创建问题；新增 `look` 配置（旧版 v1 桌宠可关闭注视）；README 增加「极简安装方法」。
-- **2026-08-15** 初始版本：通用框架（渲染器 + DSH 适配层 + 进度气泡 + 拖拽 / 悬停挥手 / 双击跳跃 / 眼睛跟随 + 逐行尺寸归一化）。
-
-## 许可与版权
-
-- 插件代码按 [MIT](./LICENSE) 授权。
-- 内置示例桌宠 `nastya`（娜斯佳）为**原创角色**，其图集按 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)（署名-非商业性使用）授权。
-- 内置**场景提示音**（声音资产）：
-  - **来源与归属**：`done-1~4.wav`（任务完成，轮换）、`error.wav`（出错）、`interrupt-1~3.wav`（被中断）共 8 个提示音，由贡献者 **@yabo083**（PR #4）使用 **Qwen3-TTS VoiceDesign** 生成并随插件提供；经本项目审核后纳入，随插件一起按 [MIT](./LICENSE) 分发。
-  - **生成工具的许可**：所用 Qwen3-TTS 模型仓库为 [Apache-2.0](https://github.com/QwenLM/Qwen3-TTS/blob/main/LICENSE)，该许可仅适用于模型仓库本身，不改变本项目的许可；使用 Qwen3-TTS 不代表 Qwen 对本项目或这些提示音的背书。
-  - **与角色版权的关系**：这些提示音通常按示例角色 `nastya`（娜斯佳）的声音演绎。该角色为**原创角色**，其图集按 **CC BY-NC 4.0**（非商业性使用）授权——因此**即便提示音本身以 MIT 提供，将其作为该角色声音使用时，角色本身「非商业性使用」的限制依然适用**；商业使用前请先向角色作者确认。
-  - **用户自定义音频**：你可以在「设置 → 完成提示音」上传自己的音频替换任意场景音；自定义音频的版权与许可由你自己负责。
-- 关于 Codex 桌宠素材/格式的版权说明，请阅读 [LEGAL.md](./LEGAL.md)。
-
-## 致谢
-感谢@tuskinekinase 提供灵感和鼓励~
-特别感谢 **@yabo083** 贡献了「定期总结」与「场景提示音」功能（PR #4）。
-
-## DSH 0.2.2-rc.1
-
-The pet observes the current `uiSession` binding, Session status and Chat activity. `node verify-bundle.cjs` checks the template without user artwork. The root template exporter requires your spritesheet and `node build.js`; the check does not select artwork. The published runtime under `packages/dsh-codex-pet` already includes pet assets and does not require that exporter.
+内置示例角色图集按 CC BY-NC 4.0 授权，声音素材与代码按 MIT 授权；用户导入素材需自行具备使用权。详见 LEGAL。

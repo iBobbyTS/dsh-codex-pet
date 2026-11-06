@@ -29,3 +29,6 @@ Thumbs.db
 
 # 本地素材暂存（不入库）
 picture/
+
+# Local task records and temporary tooling
+/.agent-work/

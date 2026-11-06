@@ -25,5 +25,13 @@
     "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.6",
     "@deepseek-ai/cordis": "^4.0.1"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iBobbyTS/dsh-codex-pet.git"
+  },
+  "homepage": "https://github.com/iBobbyTS/dsh-codex-pet#readme",
+  "bugs": {
+    "url": "https://github.com/iBobbyTS/dsh-codex-pet/issues"
+  }
 }

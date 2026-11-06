@@ -1,313 +1,37 @@
-🌐 [中文](README.md) · **English**
+# dsh-codex-pet
 
-# codex-to-dsh-pet
+[中文](README.md) · English
 
-![banner](banner.png)
+Codex spritesheet pets for DSH Web UI and Desktop, with dragging, activity poses, progress bubbles, pet import, and local Codex pet discovery. Periodic model summaries and completion/error/interruption sounds are optional.
 
-A generic framework / adapter that ports **Codex desktop pets** (spritesheet atlas) into **DeepSeek Harness (DSH)** web-GUI pets.
-This project is written with DSH — if you find any bugs or errors, please let us know; we keep iterating.
+This repository forks [Signalight/codex-to-dsh-pet](https://github.com/Signalight/codex-to-dsh-pet). The instructions below install this fork. The runtime lives in `packages/dsh-codex-pet`; the root also contains an optional per-pet exporter.
 
-- Zero-dependency core renderer (pure DOM, no build step)
-- Ready-to-use interactions: drag (runs in the direction of movement), hover to wave, double-click to jump, eyes follow the mouse (note: only Codex pet **v2** atlases — 11 rows — support eye tracking; the runtime plugin can turn this off in settings)
-- Reacts to the agent's live activity state and switches poses
-- **Progress bubble** above the pet while working (tool name / streaming text / "thinking…")
-- Runtime settings can independently hide the thinking placeholder and streamed output; optionally right-click to hide the pet for 10 seconds (the pet context menu has been removed)
-- Drags and viewport/container changes automatically clamp the pet inside visible bounds and persist corrected positions
-- Optional periodic **LLM summaries** of model-request progress, with a per-session journal (off by default)
-- **Done / error / interrupt** scenario voices — previewable and replaceable with your own audio
-- Per-row **size normalization** to fix inconsistent pose sizes in some atlases
+## Install
 
-> ⚠️ This framework (the build scripts) does **not** bundle third-party pet artwork.
-> The bundled runtime plugin ships one **example pet `nastya` (娜斯佳, an original
-> character, CC BY-NC 4.0)** for demonstration. The bundled **scenario voices** were
-> generated with Qwen3-TTS, provided under MIT, and are separate from the example
-> character (whose atlas stays CC BY-NC 4.0) — see [LEGAL.md](./LEGAL.md).
+Install DSH, Node.js, and pnpm for DSH plugin installation. Clone this fork:
 
-## Recommended: runtime plugin (install once + GUI import)
-
-`packages/dsh-codex-pet` is a **runtime plugin** — install it once, then import `.webp`
-atlases from a button in the DSH settings surface, with **no command line**. It supports
-pet switching, size, position, bubble color/opacity, and mouse-tracking (v2 only, on by
-default, toggleable), and ships one example pet `nastya`
-(娜斯佳, an original character, CC BY-NC).
-
-> 🧭 **Viewport protection:** The pet is kept within visible bounds while dragging
-> or resizing, and saved off-screen positions are corrected automatically. To
-> return to the default corner, open **Settings → 桌宠 → 还原 Reset** and click
-> **「还原位置」** to send it back to its chosen corner, or **「还原全部设定」** to
-> restore every default at once (position, size, visibility, mouse tracking,
-> bubble, periodic summaries and sounds — **your pet choice, imported pets and
-> custom sounds are kept**). The pet has no right-click menu. Enable
-> **right-click hide for 10 seconds** in settings to temporarily conceal it;
-> use the settings page for restoring its position.
-
-**Install (once only, pick one):**
-
-**Option A — one command (needs pnpm):**
-
-```powershell
-# from npm
-dsh plugin --profile web add @signalight/dsh-codex-pet
-
-# or straight from GitHub
-dsh plugin --profile web add github:Signalight/codex-to-dsh-pet#path:/packages/dsh-codex-pet
+```sh
+git clone https://github.com/iBobbyTS/dsh-codex-pet.git
+cd dsh-codex-pet
+dsh plugin --profile web add "$PWD/packages/dsh-codex-pet"
 ```
 
-**Option B — script (no pnpm):** open PowerShell inside the extracted `codex-to-dsh-pet` folder (Shift + right-click → "Open PowerShell window here"), then run:
+The runtime uses source files and bundled artwork directly; do not run the root `build.js` for it. In Desktop, select `packages/dsh-codex-pet` in the application's plugin manager; the application owns the `desktop` profile. In Windows cmd, use the full directory path instead of `$PWD`.
 
-```powershell
-.\install-runtime.ps1
-```
+Restart the DSH Host and refresh the page, then select or import a pet in Settings → 桌宠. To update, update this checkout and add the same directory to the same profile again. Avoid mixing it with the upstream version or an exported per-pet plugin.
 
-Afterwards: DSH hot-reloads `cordis.patch.yml`, so just hard-refresh `http://127.0.0.1:3080` (Ctrl+Shift+R). If it still doesn't show, fully quit and relaunch the DSH desktop app (command-line users can restart `dsh web` instead).
+## Use
 
-**Adding pets afterwards (all in the GUI):** open **Settings → 桌宠**, click **导入桌宠**,
-pick a `.webp` atlas (you can enter a display name; the pet id comes from the filename, and
-id collisions get a `-2` / `-3` suffix so a new import never overwrites an earlier pet).
-See [packages/dsh-codex-pet/README.md](./packages/dsh-codex-pet/README.md).
+- **Model work** controls the thinking placeholder, streamed text, and running-tool bubble together.
+- Codex pets are read from `~/.codex/pets` by default; override with `CODEX_HOME` or disable the source in settings.
+- Periodic summaries are off by default. Enabling them sends bounded conversation excerpts to the selected model and incurs model usage.
+- Reset position repairs placement; reset all settings preserves the selected pet, imported files, and custom audio.
 
-> 📢 **For existing users**: pets installed with the legacy method below **keep working**.
-> To switch: run `install-runtime.ps1` once, then add new pets via Settings → 桌宠 → import.
-> Legacy per-pet plugins can stay, or be disabled with `.\select-pet.ps1` and then removed
-> manually (`profiles\node_modules\<name>` plus the matching patch line).
+## Documentation
 
----
+- [Runtime settings, compatibility, and API](docs/runtime.md)
+- [Optional per-pet exporter](docs/exporter.en.md)
+- [Development rules](AGENTS.md) · [History](docs/CHANGELOG.md)
+- [Asset copyright and licensing](LEGAL.md) · [MIT code license](LICENSE)
 
-## Legacy method: one plugin per pet (build.js)
-
-### Minimal install (for absolute beginners)
-
-**Before you start you need two things**: ① [Node.js](https://nodejs.org/) installed (to run `node`); ② a working DeepSeek Harness (DSH) installation.
-
-**Step 1: Get the code**
-
-- Click the green **Code → Download ZIP** button on the repo page, download and **unzip** it to get a `codex-to-dsh-pet` folder;
-- Or clone from the command line: `git clone https://github.com/Signalight/codex-to-dsh-pet.git`
-
-**Step 2: Open PowerShell (in the right place)**
-
-1. Open the extracted `codex-to-dsh-pet` folder in File Explorer;
-2. Hold **Shift** and **right-click** on the **empty area** of the folder;
-3. Choose **"Open PowerShell window here"** from the menu (Windows 11 may say "Open in Terminal" — same thing).
-
-If the prompt shows `...\codex-to-dsh-pet`, you're in the right place.
-
-**Step 3: Drop in your spritesheet**
-
-Rename your pet spritesheet (`.webp` image) to whatever you want to call your pet (e.g. `nastya.webp`), then **drag it into** the `codex-to-dsh-pet` folder.
-
-**Step 4: Run two commands**
-
-Type the two commands below one by one, **pressing Enter after each**:
-
-```powershell
-node build.js
-```
-
-```powershell
-.\install-to-dsh.ps1
-```
-
-When you see `Done.` it worked.
-
-**Step 5: Refresh to apply**
-
-DSH hot-reloads `cordis.patch.yml`, so just **hard-refresh** `http://127.0.0.1:3080` in your browser (`Ctrl+Shift+R`). Your pet appears in the bottom-right corner 🎉 (no restart needed for the desktop app; if it still doesn't show, fully quit and relaunch the app — command-line users can restart `dsh web`.)
-
-> **Common errors**:
-> - "Running scripts is disabled..." → first run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (press `Y`), then redo Step 4.
-> - "`node` is not recognized..." → Node.js isn't installed; grab it at [nodejs.org](https://nodejs.org/).
-> - Want to switch between multiple pets? Use `.\select-pet.ps1` (see below).
-
----
-
-### 1. Prepare the artwork
-
-Name a Codex pet spritesheet **after your pet** (e.g. `fluffy.webp`) and place it in this directory.
-The plugin name is derived from the filename automatically — one spritesheet = one plugin.
-
-### 2. Configuration (optional)
-
-`name` / `label` are **not required** (derived from the spritesheet filename automatically). Only create `config.json` when you need to change size, normalization, bubble texts, etc.:
-
-```powershell
-Copy-Item config.example.json config.json
-```
-
-`config.json` fields (`name` / `label` optional; default to the spritesheet filename):
-
-| Field | Description | Default |
-|---|---|---|
-| `name` | Plugin name (also the node_modules dir / registration name) | **spritesheet filename** |
-| `label` | Label shown on the overlay | **spritesheet filename** |
-| `spritesheetPath` | Relative path to the spritesheet | auto-detected |
-| `spriteVersionNumber` | Atlas version: `1` (8×9) or `2` (8×11, includes look frames) | **auto-detected** (1872/2288 px) |
-| `size` | Display width in px | `120` |
-| `pin` | Initial position (`bottom-right` / `bottom-left` / …) | `bottom-right` |
-| `normalize` | Optional per-row size normalization `[null, …, { s, cx, cy }, …]` | none |
-| `look.enabled` | Enable "eyes follow mouse"; set `false` for old pets (no look frames) | `true` |
-| `look.deadzone` | Look deadzone (px; no tracking when the pointer is closer than this) | `28` |
-| `bubble.enabled` | Show the progress bubble | `true` |
-| `bubble.maxChars` | Max length of streamed text | `140` |
-| `bubble.runningText` | Text while a tool runs (`{tool}` is replaced with the tool name) | `Running: {tool}…` |
-| `bubble.workingText` | Text while working without a tool name | `Working…` |
-| `bubble.thinkingText` | Text while thinking | `Thinking…` |
-
-> 💡 **Version auto-detection**: build.js detects v1/v2 from the atlas dimensions — height **1872px = v1** (9 rows, no look frames, mouse tracking off), height **2288px = v2** (11 rows, 16-direction look frames, mouse tracking on). So you generally **don't need to set `spriteVersionNumber` manually**; only set it explicitly when your atlas isn't a standard size.
-
-### 3. Build
-
-```powershell
-node build.js
-```
-
-It auto-detects the atlas, derives the pet name from the filename, and generates the self-contained `lib/client.js` and `config.effective.json`.
-
-To build **one specific atlas**, use the one-command shortcut (writes `config.json` + runs `build.js`):
-
-```powershell
-.\build-pet.ps1 nastya                                      # name must match the atlas filename
-.\build-pet.ps1 nastya -NodePath C:\path\to\node.exe        # optional: explicit node path
-```
-
-You can run a smoke test to verify the build output:
-
-```powershell
-node verify-bundle.cjs
-```
-
-### 4. Install into DSH
-
-```powershell
-.\install-to-dsh.ps1
-```
-
-The script locates your DSH home automatically, copies the plugin to `<DSH home>/profiles/node_modules/<name>`, and registers it in `<DSH home>/profiles/web/cordis.patch.yml` (idempotent, auto-backup).
-
-> **DSH home detection** (shared by `install-to-dsh.ps1` / `select-pet.ps1`, in order):
-> 1. `$env:DSH_HOME` (wins if set);
-> 2. `~/.dsh` (command-line dsh's usual location, used if it exists);
-> 3. `%APPDATA%\io.github.hairyf.deepseek-harness-desktop\data\dsh`
->    (DeepSeek Harness **desktop app**'s data directory).
->
-> Command-line users are usually at `~/.dsh`; desktop-app users at `%APPDATA%\...\data\dsh`.
-> Note: the desktop app does **not** export `DSH_HOME` to your terminal — the scripts find it via the probe above.
-> The detection logic lives in `dsh-home.ps1` (shared by the install/select scripts); edit that file to customize.
-
-### 5. Refresh to apply
-
-DSH hot-reloads `cordis.patch.yml`, so just hard-refresh `http://127.0.0.1:3080` in your browser (`Ctrl+Shift+R`) — the pet appears in the bottom-right corner. No restart is needed for the desktop app (which you can't and shouldn't stop manually); if it still doesn't show, fully quit and relaunch it. Command-line users can restart `dsh web`:
-
-```powershell
-dsh web
-```
-
-### 6. Choose which pets are active (legacy per-pet plugins only)
-
-`select-pet.ps1` only manages **legacy per-pet plugins** (built by `build.js`, top-level under `node_modules`, `dsh.client` only):
-
-```powershell
-.\select-pet.ps1          # interactive menu: type a number to toggle, q to save & quit
-.\select-pet.ps1 -List    # just show the current state, no changes
-```
-
-It scans `node_modules` (including `@scope/` subdirectories) for pet plugins: legacy per-pet plugins can be toggled, while scoped runtime plugins (e.g. `@signalight/dsh-codex-pet`) are listed for information only and are **never modified** (manage their pets via Settings → 桌宠). Saving rewrites only the legacy per-pet `- insert:` rows and preserves every other patch entry (auto-backup). Hard-refresh the browser afterwards to apply.
-
-## Atlas format
-
-Codex pet atlases are fixed-layout sprite sheets:
-
-| Item | Value |
-|---|---|
-| Frame size | 192 × 208 px |
-| Columns | 8 |
-| v1 rows | 9 (1536 × 1872) |
-| v2 rows | 11 (1536 × 2288; rows 9–10 are the 16-direction look frames) |
-
-Per-row animations (frame interval ms):
-
-| Row | Animation | Frames | Interval |
-|---|---|---|---|
-| 0 | idle | 6 | 160 |
-| 1 | runningRight | 8 | 120 |
-| 2 | runningLeft | 8 | 120 |
-| 3 | waving | 4 | 140 |
-| 4 | jumping | 5 | 140 |
-| 5 | failed | 8 | 140 |
-| 6 | waiting / sleeping | 6 | 150 |
-| 7 | running | 6 | 120 |
-| 8 | review | 6 | 150 |
-| 9–10 | look (16 directions) | 16 | — |
-
-## Directory layout
-
-```
-.
-├── config.example.json     # example configuration
-├── build.js                # inlines atlas + config → lib/client.js (name from atlas filename)
-├── verify-bundle.cjs       # build smoke test
-├── build-pet.ps1           # one-command build for a named pet (optional -NodePath)
-├── dsh-home.ps1            # shared DSH home detection (used by install/select)
-├── install-to-dsh.ps1      # one-click install
-├── select-pet.ps1          # choose which pets are active
-├── lib/
-│   ├── index.js            # host (Node) half
-│   ├── client.template.js  # browser half source template
-│   └── client.js           # build output (generated by build.js, gitignored)
-├── LEGAL.md                # copyright & licensing notes
-└── LICENSE
-```
-
-## Rollback
-
-```powershell
-# Reuse the same DSH home detection as the install script (dsh-home.ps1)
-. .\dsh-home.ps1
-$profileDir = Join-Path (Get-DshHome) 'profiles\web'
-$nodeModules = Join-Path (Split-Path -Parent $profileDir) 'node_modules'
-
-Remove-Item -Recurse -Force (Join-Path $nodeModules '<name>')
-Copy-Item "$profileDir\cordis.patch.yml.bak" "$profileDir\cordis.patch.yml" -Force
-# then hard-refresh the browser (desktop app hot-reloads; CLI users restart dsh web)
-```
-
-## Changelog
-
-- **2026-10-23** Release **0.5.0**: **the big one — your local Codex pets are read automatically.** The plugin now scans `~/.codex/pets` (override with the `CODEX_HOME` environment variable) and pulls every Codex pet it finds (`pet.json` + `spritesheet.webp`) into the picker **in place** — nothing is copied or moved. The plainer pet dropdown in Settings → 桌宠 became a **thumbnail gallery** grouped into 「我的桌宠 / Codex 桌宠 / 内置桌宠」, each card carrying a **v1 / v2** badge and rendered from the atlas size that matches its version (1536×1872 = v1, nine rows; 1536×2288 = v2, eleven rows). A switch above the gallery — **「读取本机 Codex 桌宠（默认开启）」** — turns the Codex source off, leaving only the built-in pet and your own atlases; 「还原全部设定」 turns it back on. Thumbnails are only mounted while a card is near the viewport and unmounted once it scrolls away (a decoded atlas is roughly 14 MB), so the settings page stays responsive. Pets sharing an id resolve as **my pets > Codex pets > built-in pets** (so a Codex `nastya` shadows the bundled example). New `test/registry.test.js` plus six cases; 74 tests pass.
-- **2026-10-23** Release **0.4.2**: fixes the **periodic summary always claiming the pet was "spinning its wheels"** — the summary generated every five requests kept saying the batch had no actions, no tool calls, empty records, nothing accomplished. The cause was not the summarizer: it was the data fed to it. Since 0.3.3 the plugin rebuilt the conversation nodes from `hooks.trajectory`'s `eventNodes` by reading a **wrapped** shape, `{ data: { kind, node } }`, while `dsh-client-ui-trajectory` puts the **finalized node itself** into `eventNodes` (`{ kind: "user" | "assistant" | "tool-result", seq, turn, step, blocks, … }`, with tool calls as `{ kind: "tool-call", name, argsRaw, callId }` blocks). The node array therefore came out empty, so the summarizer received no user instruction, no reply text and no tool calls — and truthfully answered that nothing had happened. Both shapes are now accepted (plain nodes first, the contribution wrapper kept as a fallback). The same root cause silently disabled part of the sound feature: the **"error" scenario voice and the "done" chime gate** look for `turn-error` nodes, which the 0.2 line never emits, so they are now synthesized from the **newest request of each turn failing** (a turn that retried successfully is not misreported). The pet's bubble text was never affected (it reads `partial`). Three unit tests cover reading finalized nodes, the end-to-end summary payload and the synthesized turn error.
-- **2026-10-07** Release **0.4.1**: fixes "after leaving the **settings** panel the pet's summary occasionally flashes in the **top-left corner** of the screen". Root cause: the bubbles, the summary journal and the context menu are absolutely positioned and have **no default coordinates at all** — each one is placed by "measure the pet, then show" — while **leaving the settings panel** rebuilds the host layer the pet lives in. During that instant the pet's live position cannot be read, yet the old code still made the bubble visible, so it stayed at the host origin — the top-left corner of the screen — never having been placed. Bubbles are now **placed first, shown second**: the geometry comes from the pet's live position when that is readable, otherwise from the last placement the pet controller recorded; when neither exists the bubble **stays hidden and retries every 100ms for up to 1.2s**, so it may appear a moment later but never flashes into a corner. The same class of bug is fixed for the pet itself: an empty or unknown nine-anchor "position" used to park the pet in the top-left corner, and now falls back to bottom-right. Four unit tests cover both placement rules.
-- **2026-10-03** Release **0.4.0**: two new **restore** buttons, fixing "after changing the desktop resolution the pet ends up off-screen and can never be dragged back". Root cause: a dragged position is persisted as `left`/`top`, and that **wins over** the nine-anchor "position" setting, so a resolution change leaves the pet parked outside the viewport. Open **Settings → 桌宠 → 还原 Reset** and click **「还原位置」** to drop the saved drag coordinates and hand placement back to the anchor (while the pet is still visible you can also **right-click it** and pick 「还原位置」); **「还原全部设定」** restores position, size, visibility, mouse tracking, bubble colour/opacity, periodic summaries and scenario sounds all at once, **keeping your pet choice, imported pet files and custom sounds** (a confirmation is shown first). Because the browser half only recreates the pet when the pet / visibility / size / position change, and clearing `left`/`top` touches none of those, a new `display.layoutRev` is bumped by the host on every re-seat: the browser half uses it to re-place the pet **in place** (no recreate, no flicker). New endpoints: `POST /api/codex-pet/reset-position` and `POST /api/codex-pet/reset-all`.
-- **2026-09-29** Release **0.3.4**: fix **0.3.3 showing "thinking…" on DSH 0.2.0-rc.1 while never showing the model's live output text**. Root cause: the 0.2 line splits the conversation into several view targets, and the live tail of a streaming step (`partial.blocks`) belongs to the **`chat`** target, published by `dsh-client-ui-chat` through `ctx.uiSession.provide({ hooks: ['chat'], … })`; 0.3.3 only read `hooks.trajectory`, whose own `partial` stays empty until its target has accumulated chunks — so the live text was always blank (running / pending state still came from `hooks.session`, which is why "thinking…" looked correct). The bubble text and tool name now read **`hooks.chat` first** and fall back to `hooks.trajectory`; `turnEnds` also accepts chat's `Map<turn, seq>` shape. Behaviour is unchanged on 0.1.x and 0.2.0-rc.1+.
-- **2026-09-29** **0.3.3** (not published to npm on its own — its fix shipped with **0.3.4**): fix the pet's **bubble no longer showing "thinking…" or the model's live output text** on DSH **0.2.0-rc.1** and later. Same upgrade as 0.3.2, different mechanism: on 0.1.x the plugin read its conversation snapshot from `sessions.currentProvideInfo`, and that bridge was retired together with `@deepseek-ai/dsh-client-runtime` in the 0.2 line — so the snapshot was permanently `null`, the derived activity was permanently `idle`, and the bubble never appeared at all (not even "running: \<tool\>"), nor did the pet switch to its running/waiting pose. It now reads the 0.2 internal `uiSession` service's **main binding**: `hooks.trajectory` supplies the live tail (`partial` / `runningCalls` — the bubble text and the tool name) and `hooks.session` supplies running / pending / open state, while `nodes` / `turnEnds` / `requests` are rebuilt from the trajectory event nodes (which also restores the done chime and the periodic summaries). For old-host compatibility `uiSession` is **not** declared in `inject` (a missing hard dependency parks the whole plugin) — it is resolved lazily through `ctx.get('uiSession')` with a short polling subscribe, falling back to the legacy `currentProvideInfo` path, so **0.1.x and 0.2.0-rc.1+ share one code path**.
-- **2026-09-29** Release **0.3.2**: fix incompatibility with DSH **0.2.0-rc.1** and later, where DSH's startup compatibility gate **disabled the whole plugin row** (the pet and the entire «桌宠» settings section disappeared). Root cause: the manifest declared `@deepseek-ai/dsh-client-runtime` as a `peerDependencies` entry (`^0.1.0-rc.6`), but DSH 0.2 split and retired that package; DSH validates every `@deepseek-ai/dsh*` peer against its own running version and disables the whole row when one does not match (`Plugin … is incompatible with dsh …: peerDependencies …`). The manifest now declares only DSH packages that actually exist and are actually used, with open-ended ranges: `@deepseek-ai/dsh-client-ui-slots` and `@deepseek-ai/dsh-host-webserver` (both `>=0.1.0-rc.6`), so **0.1.x and 0.2.0-rc.1+ both pass**; it also adds `dsh.manifestVersion: 1` and points `dsh.client.inject` at `@deepseek-ai/dsh-client-ui-slots` instead of the retired name. If you cannot upgrade right away, `dsh plugin --profile web allow-version` grants a per-version exemption.
-- **2026-08-27** Release **0.3.1**: Fix (issue #8) — the pet could be hidden behind side panels such as `dsh-better-sidebar`. The pet host is now mounted via a **React portal to the top-level `document.body`** (`position:fixed` + a very high `z-index`), so the pet (and its bubbles / journal / menu) always render **above** side panels; the host stays `pointer-events:none`, so it never blocks other interaction.
-- **2026-08-25** Merged contributor **@yabo083**'s PR #4: the runtime plugin gains periodic **first-person LLM summaries** (using the selected model; settings + per-session journal, off by default) and **done / error / interrupt scenario voices** (on by default, previewable, custom audio uploadable). See "License & copyright" for the sounds' attribution and license. Version bumped to **0.3.0**.
-- **2026-08-24** The runtime plugin gains a "mouse tracking" toggle (Settings → 桌宠): whether a v2 atlas's eyes follow the pointer, **on by default**, chooseable in the GUI; the UI notes that this only applies to **v2** atlases (v1 has no look cells, so the setting is inert). Persisted as the service-side `mouseTracking` display config.
-- **2026-08-18** Fix (issue #3): `select-pet.ps1` now also scans scoped (`@scope/`) directories, so the runtime plugin is visible but only listed, never modified; toggling legacy per-pet plugins rewrites only their own patch rows and preserves every other entry (no more silently deleting the runtime plugin or other third-party entries); `install-to-dsh.ps1` / `install-runtime.ps1` and the README restart guidance now say "hot-reload + hard-refresh" — the desktop app can't and shouldn't be restarted by hand.
-- **2026-08-17** Fix (0.1.2): importing a new pet no longer overwrites the previous one. Pet ids used to be derived from the filename, and Codex atlases are all named `spritesheet.webp`, so every import clobbered the same folder; id collisions now get a `-2` / `-3` suffix automatically, and only a deliberate re-import with the same id + same typed name updates that pet in place (for replacing an atlas with a fixed version).
-- **2026-08-17** Added the `packages/dsh-codex-pet` runtime plugin (install once; GUI import of pets, pet switching / size / position / bubble color & opacity); the example pet is now the original character **nastya (娜斯佳)**, licensed CC BY-NC 4.0 (see LEGAL.md).
-- **2026-08-17** Added an English README (`README.en.md`) with a language switcher at the top; added a repository description on GitHub.
-- **2026-08-17** Docs: example pet no longer uses the game character name `anaxa`; it now uses the original character `nastya`.
-- **2026-08-17** Refactor: DSH home detection extracted into shared `dsh-home.ps1` (used by the install/select scripts and the README rollback snippet); `build-pet.ps1` gained `-NodePath`, no longer depending on the author's machine path; `select-pet.ps1` now preserves comments and non-pet patch entries on save, matching `install-to-dsh.ps1`.
-- **2026-08-16** Fix: `build.js` auto-detection ignores the repo's own `banner.png`; `install-to-dsh.ps1` / `select-pet.ps1` support the three-level `DSH_HOME` probe (`$env:DSH_HOME` → `~/.dsh` → desktop app `%APPDATA%\...\data\dsh`); `install-to-dsh.ps1` drops the `[]` placeholder when writing the patch, fixing invalid YAML in generated `cordis.patch.yml`.
-- **2026-08-16** Fix: loading multiple pets at once no longer errors (template top-level `const` wrapped in an IIFE); several pets can now be enabled simultaneously.
-- **2026-08-16** `build.js` auto-detects v1/v2 from atlas dimensions (height 1872px = v1, 2288px = v2); v2 enables mouse tracking automatically — no need to fill in `spriteVersionNumber`.
-- **2026-08-16** Pet name auto-derived from atlas filename (one atlas = one plugin); stale `spritesheetPath` falls back automatically; new `select-pet.ps1` for toggling active pets.
-- **2026-08-15** Fixed the install script's UTF-8 encoding and directory-creation issues; added `look` config (v1 pets can disable eye tracking); README gained the "minimal install" section.
-- **2026-08-15** Initial release: generic framework (renderer + DSH adapter + progress bubble + drag / hover wave / double-click jump / eyes-follow + per-row size normalization).
-
-## License & copyright
-
-- Plugin code is licensed under [MIT](./LICENSE).
-- The bundled example pet `nastya` (娜斯佳) is an **original character**; its atlas is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (Attribution-NonCommercial).
-- Built-in **scenario voices/sounds**:
-  - **Attribution**: the 8 bundled sounds (`done-1~4.wav`, `error.wav`, `interrupt-1~3.wav`) were generated by contributor **@yabo083** (PR #4) using **Qwen3-TTS VoiceDesign** and shipped with the plugin; they were reviewed and accepted into this project, and are distributed under [MIT](./LICENSE) together with the plugin.
-  - **Generator license**: the Qwen3-TTS model repo is [Apache-2.0](https://github.com/QwenLM/Qwen3-TTS/blob/main/LICENSE); that license applies to the model repo only and does **not** change this project's license. Using Qwen3-TTS does not imply endorsement by Qwen.
-  - **Relationship to the character**: these lines are usually performed as the example pet `nastya` (娜斯佳). That character is an **original character** whose atlas is licensed **CC BY-NC 4.0** (non-commercial) — so even though the sound files are MIT-licensed, using them as that character's voice keeps the character's **non-commercial** restriction in force; ask the character's author before any commercial use.
-  - **User audio**: you may upload your own audio to replace any scenario sound (Settings → 完成提示音); custom audio's copyright and license are your own responsibility.
-- For copyright notes about Codex pet artwork/format, see [LEGAL.md](./LEGAL.md).
-
-## Acknowledgements
-
-Thanks to @tuskinekinase for inspiration and encouragement ~
-Special thanks to **@yabo083** for contributing the "periodic summaries" and "scenario voices" features (PR #4).
+The bundled example character atlas uses CC BY-NC 4.0; sound assets and code use MIT. Obtain the necessary rights for imported assets. See LEGAL.
