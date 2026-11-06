@@ -853,7 +853,7 @@ window.__ModuleLoader__.load({
 		 * (authoritative for partial/runningCalls/requests/eventNodes), on 0.1.x
 		 * the retired flat snapshot.
 		 */
-		function mergeConversationSnapshot(binding, live, session, chat) {
+		function mergeConversationSnapshot(binding, live, session, chat, status) {
 			// Current ChatSnapshot keeps its flat tail under legacy.
 			chat = chat?.legacy ?? chat;
 			if (!binding && !live && !session && !chat) return null;
@@ -869,9 +869,10 @@ window.__ModuleLoader__.load({
 			const liveTurns = live && live.turnEnds;
 			const chatTurns = chat && chat.turnEnds;
 			const bindingId = binding ? (binding.key !== undefined ? binding.key : (binding.props && binding.props.sessionId)) : undefined;
-			const pendingSource = session
-				? (session.pendingSubmissions !== undefined ? session.pendingSubmissions : session.pending)
-				: (live ? live.pending : undefined);
+			// Submission echoes are not requests for user interaction.
+			const pendingSource = status?.pendingInteraction !== undefined
+				? [status.pendingInteraction]
+				: (session?.pending ?? live?.pending);
 			const openState = session && session.openState !== undefined ? session.openState : (live ? live.openState : undefined);
 			return {
 				sessionId: bindingId || (session && session.sessionId) || (live && live.sessionId) || null,
@@ -925,10 +926,16 @@ window.__ModuleLoader__.load({
 				() => (chatSource ? chatSource.getSnapshot() : null),
 			);
 
+			const statusSource = uiSession && uiSession.sessionStatus;
+			const statuses = react.useSyncExternalStore(
+				(cb) => statusSource ? statusSource.subscribe(cb) : () => {},
+				() => statusSource ? statusSource.getSnapshot() : undefined,
+			);
+			const status = statuses?.get(carrier?.key);
 			const live = trajectorySnap || sessionSnap;
 			return react.useMemo(
-				() => mergeConversationSnapshot(carrier, live, sessionSnap, chatSnap),
-				[carrier, live, sessionSnap, chatSnap],
+				() => mergeConversationSnapshot(carrier, live, sessionSnap, chatSnap, status),
+				[carrier, live, sessionSnap, chatSnap, status],
 			);
 		}
 
@@ -2297,7 +2304,7 @@ window.__ModuleLoader__.load({
 		exports.deriveActivity = deriveActivity;
 		// Render-smoke hook: lets the node test suite mount the settings UI
 		// without a browser. The host reads only apply/inject.
-			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, summaryRouteEnabled, pinPlacement, bubblePlacement, clampPetPosition, bubbleContent, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
+			exports.__internals = { SoundControls, SummaryControls, SettingsSection, ResetControls, PetGallery, AtlasThumb, groupPets, latestTurnInterrupted, latestTurnErrored, shouldPlayDone, completedTurnsOf, completedModelRequestsOf, mergeConversationSnapshot, useConversationSnapshot, legacyProjectionOf, createServiceSource, buildSummaryPayload, baselineAutoTracker, isCurrentAutoTrackerSession, selectAutoSummaryBatch, settleAutoTrackerAfterSummary, summaryRouteEnabled, pinPlacement, bubblePlacement, clampPetPosition, bubbleContent, DEFAULT_PIN, REVEAL_RETRIES, REVEAL_RETRY_MS };
 		return module.exports;
 	}
 });

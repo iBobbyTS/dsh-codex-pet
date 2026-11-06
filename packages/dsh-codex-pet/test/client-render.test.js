@@ -367,10 +367,21 @@ test('mergeConversationSnapshot folds the current host bindings into one snapsho
 
   assert.equal(mergeConversationSnapshot(undefined, null, null), null);
 
-  // The session hook alone is enough to drive the waiting pose.
-  const waiting = mergeConversationSnapshot(binding, null, { sessionId: 'session-7', running: true, pendingSubmissions: [{ id: 1 }] });
-  assert.deepEqual(waiting.pending, [{ id: 1 }]);
-  assert.equal(deriveActivity(waiting), 'waiting', 'a pending submission wins over a running turn');
+  // Submission echoes do not hide an active tool or a streaming response.
+  const submitting = { ...session, pendingSubmissions: [{ id: 1 }] };
+  const active = mergeConversationSnapshot(binding, trajectory, submitting);
+  assert.deepEqual(active.pending, []);
+  assert.equal(deriveActivity(active), 'running');
+  assert.equal(deriveActivity(mergeConversationSnapshot(binding, null, submitting)), 'review');
+
+  for (const kind of ['approval', 'question', 'plan-review']) {
+    const interaction = { kind, key: 'request-1', sessionId: 'session-7' };
+    const waiting = mergeConversationSnapshot(binding, trajectory, session, undefined, { pendingInteraction: interaction });
+    assert.deepEqual(waiting.pending, [interaction]);
+    assert.equal(deriveActivity(waiting), 'waiting', 'an actual user interaction takes precedence');
+  }
+  const cleared = mergeConversationSnapshot(binding, trajectory, session, undefined, { pendingInteraction: undefined });
+  assert.equal(deriveActivity(cleared), 'running', 'answering the interaction resumes activity');
 
   // Legacy host: the flat snapshot keeps its own nodes/turnEnds instead of a rebuild.
   const legacyNodes = [{ kind: 'assistant', turn: 1, blocks: [] }];
@@ -612,4 +623,40 @@ test('right click has only the optional hide action, without a legacy menu', () 
   assert.match(source, /RIGHT_CLICK_HIDE_MS = 10_000/);
   assert.match(source, /if \(ref\.current\) ref\.current\.style\.visibility = "visible"/);
   assert.match(source, /checkboxField\("右键隐藏 10 秒"/);
+});
+
+
+test('current host interaction source follows the selected binding, not another session', () => {
+  const cleanups = [];
+  const subscribed = new Set();
+  const hookReact = { ...react,
+    useSyncExternalStore: (subscribe, get) => { cleanups.push(subscribe(() => {})); return get(); },
+    useMemo: calculate => calculate(),
+  };
+  const runtime = factory(name => {
+    assert.equal(name, 'react');
+    return hookReact;
+  });
+  const observable = (name, getSnapshot) => ({ getSnapshot,
+    subscribe: () => { subscribed.add(name); return () => {}; },
+  });
+  const statuses = new Map();
+  let selected = 'source';
+  const binding = observable('binding', () => ({ key: selected, hooks: {
+    session: observable('session', () => ({ sessionId: selected, running: true, pendingSubmissions: [{ id: 'echo' }] })),
+    chat: observable('chat', () => ({ legacy: { runningCalls: [{ name: 'bash' }] } })),
+  } }));
+  const uiSession = { adapter: { current: binding }, sessionStatus: observable('status', () => statuses) };
+  const uiSource = observable('service', () => uiSession);
+  const read = () => runtime.__internals.useConversationSnapshot(null, uiSource);
+  try {
+    statuses.set('fork', { pendingInteraction: { kind: 'approval', key: 'approve-fork' } });
+    assert.equal(runtime.deriveActivity(read()), 'running', 'another session cannot change this pet activity');
+    selected = 'fork';
+    assert.equal(read().sessionId, 'fork');
+    assert.equal(runtime.deriveActivity(read()), 'waiting', 'the selected fork has its own pending interaction');
+    statuses.delete('fork');
+    assert.equal(runtime.deriveActivity(read()), 'running', 'answering resumes the tool activity');
+    assert.ok(subscribed.has('status'), 'interaction changes are subscribed, not read only on another render');
+  } finally { cleanups.forEach(dispose => dispose()); }
 });
