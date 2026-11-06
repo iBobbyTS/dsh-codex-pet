@@ -2,6 +2,12 @@
 
 Runtime package of the [iBobbyTS/dsh-codex-pet fork](https://github.com/iBobbyTS/dsh-codex-pet), derived from Signalight/codex-to-dsh-pet. It renders Codex v1/v2 spritesheet pets with activity bubbles, optional summaries, and scenario sounds.
 
+## Compatibility
+
+Verified: DSH 0.2.2-rc.1 (source review and automated checks); Desktop testing has not been completed.
+
+## Install
+
 From the fork checkout root, install this directory:
 
 ```sh

@@ -6,6 +6,10 @@
 
 本仓库是 [Signalight/codex-to-dsh-pet](https://github.com/Signalight/codex-to-dsh-pet) 的 fork。以下安装的是本 fork；运行时位于 `packages/dsh-codex-pet`，根目录另有可选的每宠插件导出工具。
 
+## 兼容性
+
+已验证：DSH 0.2.2-rc.1（源码与自动化检查）；尚未完成 Desktop 实测。
+
 ## 安装
 
 需要已安装 DSH、Node.js，以及 DSH 插件安装所需的 pnpm。从本 fork 获取代码：

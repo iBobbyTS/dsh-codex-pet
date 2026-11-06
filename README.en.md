@@ -6,6 +6,10 @@ Codex spritesheet pets for DSH Web UI and Desktop, with dragging, activity poses
 
 This repository forks [Signalight/codex-to-dsh-pet](https://github.com/Signalight/codex-to-dsh-pet). The instructions below install this fork. The runtime lives in `packages/dsh-codex-pet`; the root also contains an optional per-pet exporter.
 
+## Compatibility
+
+Verified: DSH 0.2.2-rc.1 (source review and automated checks); Desktop testing has not been completed.
+
 ## Install
 
 Install DSH, Node.js, and pnpm for DSH plugin installation. Clone this fork:
