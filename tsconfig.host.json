@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/index.ts",
+    "packages/dsh-codex-pet/src/**/*.ts"
+  ],
+  "exclude": [
+    "packages/dsh-codex-pet/src/client.ts",
+    "packages/dsh-codex-pet/src/client-contract.ts"
+  ]
+}

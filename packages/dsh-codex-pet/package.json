@@ -1,18 +1,19 @@
 {
   "name": "@signalight/dsh-codex-pet",
   "version": "0.5.0",
-  "description": "DSH web-GUI pet runtime: renders Codex spritesheet-atlas pets (v1/v2) with drag/wave/jump, live activity poses and progress bubbles. 把 Codex 桌宠图集渲染为 DSH 网页桌宠的运行时插件。",
+  "description": "DSH web-GUI pet runtime: renders Codex spritesheet-atlas pets (v1/v2) with drag/wave/jump, live activity poses and progress bubbles. \u628a Codex \u684c\u5ba0\u56fe\u96c6\u6e32\u67d3\u4e3a DSH \u7f51\u9875\u684c\u5ba0\u7684\u8fd0\u884c\u65f6\u63d2\u4ef6\u3002",
   "type": "module",
-  "main": "src/index.js",
+  "main": "lib/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./client": "./src/client.js",
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "cordis.patch.yml",
-    "assets"
+    "assets",
+    "lib"
   ],
   "dsh": {
     "manifestVersion": 1,
@@ -32,17 +33,14 @@
     "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6",
     "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.6"
   },
-  "devDependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
+  "devDependencies": {},
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/iBobbyTS/dsh-codex-pet.git"
   },
   "scripts": {
-    "test": "node --test test/registry.test.js test/service.test.js test/client-render.test.js"
+    "test": "pnpm --dir ../.. test"
   },
   "homepage": "https://github.com/iBobbyTS/dsh-codex-pet#readme",
   "bugs": {

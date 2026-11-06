@@ -124,7 +124,8 @@ if (!template.includes('__CONFIG_JSON__') || !template.includes('__SPRITESHEET_D
 }
 const out = template
   .replace('__CONFIG_JSON__', JSON.stringify(effective))
-  .replace('__SPRITESHEET_DATA_URI__', dataUri);
+  .replace('__SPRITESHEET_DATA_URI__', dataUri)
+  .replace(/^\/\/# sourceMappingURL=.*$/gm, '');
 fs.writeFileSync(outPath, out, 'utf8');
 
 // 6) Persist the effective config so install-to-dsh.ps1 reads the same name.

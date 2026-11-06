@@ -20,7 +20,7 @@ cd dsh-codex-pet
 dsh plugin --profile web add "$PWD/packages/dsh-codex-pet"
 ```
 
-运行时直接使用源码和内置素材，无需运行根目录 `build.js`。Desktop 请在应用插件管理器中选择 `packages/dsh-codex-pet` 目录；`desktop` profile 由应用管理。Windows cmd 使用完整目录路径，不使用 `$PWD`。
+运行时使用仓库中预构建的 JS 和内置素材，无需运行根目录 `build.js`。Desktop 请在应用插件管理器中选择 `packages/dsh-codex-pet` 目录；`desktop` profile 由应用管理。Windows cmd 使用完整目录路径，不使用 `$PWD`。
 
 安装后重启 DSH Host 并刷新页面，在「设置 → 桌宠」选择或导入宠物。更新时更新本 checkout，并在同一 profile 重新添加同一目录；不要混装上游版本或每宠导出插件。
 

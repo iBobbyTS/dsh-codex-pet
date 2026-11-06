@@ -32,11 +32,12 @@ if (-not (Test-Path (Join-Path $pkgDir 'package.json'))) {
     throw "plugin package missing: $pkgDir"
 }
 
-# 1) Copy the plugin package (src/ + assets/ + cordis.patch.yml + package.json).
+# 1) Copy the prebuilt runtime, its map sources and resources.
 if (Test-Path $pluginDst) { Remove-Item $pluginDst -Recurse -Force }
 [System.IO.Directory]::CreateDirectory($pluginDst) | Out-Null
 Copy-Item (Join-Path $pkgDir 'package.json') (Join-Path $pluginDst 'package.json') -Force
 Copy-Item (Join-Path $pkgDir 'cordis.patch.yml') (Join-Path $pluginDst 'cordis.patch.yml') -Force
+Copy-Item (Join-Path $pkgDir 'lib') (Join-Path $pluginDst 'lib') -Recurse -Force
 Copy-Item (Join-Path $pkgDir 'src') (Join-Path $pluginDst 'src') -Recurse -Force
 if (Test-Path (Join-Path $pkgDir 'assets')) {
     Copy-Item (Join-Path $pkgDir 'assets') (Join-Path $pluginDst 'assets') -Recurse -Force

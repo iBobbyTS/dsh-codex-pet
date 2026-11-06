@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { codexPetsDir, loadPetRegistry, petEntryView } from '../src/registry.js'
+import { codexPetsDir, loadPetRegistry, petEntryView } from '../lib/registry.js'
 
 /** Write '<root>/<id>/pet.json' plus a (non-image) atlas file. */
 function writePet(root, id, manifest = {}) {

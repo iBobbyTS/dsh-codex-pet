@@ -11,9 +11,9 @@ import { EventEmitter } from 'node:events'
 import { appendFileSync, mkdtempSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PetService } from '../src/service.js'
-import { makeCodexPetRoutes, SOUND_ROUTE } from '../src/routes.js'
-import { inject } from '../src/index.js'
+import { PetService } from '../lib/service.js'
+import { makeCodexPetRoutes, SOUND_ROUTE } from '../lib/routes.js'
+import { inject } from '../lib/index.js'
 
 const PET_ENTRY = {
   id: 'nastya',

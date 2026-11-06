@@ -143,7 +143,7 @@ same id with the same typed display name updates that pet in place.
 ## Architecture
 
 ```
-src/
+src/                  # TS edit sources; lib/ contains generated runtime JS/maps
 ├── index.js     host half: name/inject/apply, mounts service + routes
 ├── registry.js  scans assets/* + ~/.dsh/pets/*, normalizes Codex atlases
 ├── service.js   persisted selection + display config (~/.dsh/codex-pet.json)
@@ -194,6 +194,12 @@ overrides are stored under `~/.dsh/pets/sounds/` and survive plugin updates.
 
 ## Validation
 
-Run `node --test packages/dsh-codex-pet/test/*.test.js` from the repository root. DSH 0.2.2-rc.1 was checked against source contracts and automated tests; these checks do not establish a real Desktop end-to-end result.
+Run `pnpm test` from the repository root. DSH 0.2.2-rc.1 was checked against source contracts and automated tests; these checks do not establish a real Desktop end-to-end result.
 
 See [LEGAL](../LEGAL.md) for assets and [AGENTS](../AGENTS.md) for development boundaries.
+
+## Development and delivery
+
+Use Node 24.11.0, `pnpm@10.28.2`, and `pnpm install --frozen-lockfile` at the repository root. The pnpm workspace has one lockfile. `pnpm typecheck` separates Host and browser environments. `pnpm build:runtime` builds the nested runtime and generic exporter template without reading artwork/config.json or touching exported `lib/client.js`. `pnpm test` builds a temporary candidate and runs runtime, template and synthetic v1/v2 export checks. `pnpm check:dist` compares generated file sets and contents, packs the nested runtime, and tests clean installation/Host loading. `pnpm check` combines those checks.
+
+Install `packages/dsh-codex-pet` or its packed `.tgz`; the root development package is not the runtime installation target. Both installation forms consume prebuilt files. `build.js` remains an explicit artwork/configuration exporter; its per-pet output removes the template's source-map URL. Installer scripts copy prebuilt runtime files and only runtime manifest fields into exported pets. After `pnpm check`, `pnpm test:installers /path/to/pwsh` exercises both PowerShell installers twice in a temporary DSH_HOME (also run by CI). macOS PowerShell 7.5.2 file-copy/patch checks passed; Windows and real Desktop interaction remain platform checks.

@@ -191,7 +191,7 @@ Codex 桌宠图集是固定布局的精灵图：
 ├── README.en.md            # English README
 ├── lib/
 │   ├── index.js            # 宿主（Node）半身
-│   ├── client.template.js  # 浏览器半身源码模板
+│   ├── client.template.js  # 生成模板（源码：src/client.template.ts）
 │   └── client.js           # 构建产物（build.js 生成，已 gitignore）
 ├── LEGAL.md                # 版权与许可说明
 └── LICENSE

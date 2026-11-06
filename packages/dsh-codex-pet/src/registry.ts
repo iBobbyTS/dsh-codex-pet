@@ -1,3 +1,9 @@
+import type { PetEntry, Registry } from './protocol.js'
+interface ScanOptions {
+  assetPrefix?: string
+  warnings?: string[]
+  source?: string
+}
 /**
  * Pet registry — the Codex spritesheet-atlas contract. One pet is a directory
  * holding a 'pet.json' manifest plus one atlas image; nothing else is required,
@@ -29,7 +35,7 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/
 const SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/
 
 /** Absolute package root, resolved from a module URL (src/ or lib/). */
-export function petPackageRoot(importMetaUrl) {
+export function petPackageRoot(importMetaUrl: string) {
   return fileURLToPath(new URL('../', importMetaUrl))
 }
 
@@ -67,8 +73,12 @@ export const PET_SOURCES = ['builtin', 'codex', 'user']
  * Read image dimensions from a WebP/PNG/GIF header (no decode). Returns null
  * when the format is unrecognised. Ported from the codex-to-dsh-pet build.js.
  */
-export function detectDimensions(buffer) {
-  if (buffer.length >= 30 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+export function detectDimensions(buffer: Buffer) {
+  if (
+    buffer.length >= 30 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  ) {
     const chunk = buffer.toString('ascii', 12, 16)
     if (chunk === 'VP8X' && buffer.length >= 30) {
       return {
@@ -77,10 +87,13 @@ export function detectDimensions(buffer) {
       }
     }
     if (chunk === 'VP8L' && buffer.length >= 25) {
-      const b0 = buffer[21], b1 = buffer[22], b2 = buffer[23], b3 = buffer[24]
+      const b0 = buffer[21],
+        b1 = buffer[22],
+        b2 = buffer[23],
+        b3 = buffer[24]
       return {
-        width: ((b1 & 0x3f) << 8 | b0) + 1,
-        height: ((b3 & 0x0f) << 10 | (b2 << 2) | (b1 >> 6)) + 1,
+        width: (((b1 & 0x3f) << 8) | b0) + 1,
+        height: (((b3 & 0x0f) << 10) | (b2 << 2) | (b1 >> 6)) + 1,
       }
     }
     if (chunk === 'VP8 ' && buffer.length >= 27) {
@@ -90,7 +103,13 @@ export function detectDimensions(buffer) {
       }
     }
   }
-  if (buffer.length >= 24 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+  if (
+    buffer.length >= 24 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
     return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
   }
   if (buffer.length >= 10) {
@@ -103,7 +122,7 @@ export function detectDimensions(buffer) {
 }
 
 /** Auto-detect the Codex atlas version from the image dimensions. */
-export function detectSpriteVersion(buffer) {
+export function detectSpriteVersion(buffer: Buffer) {
   const dim = detectDimensions(buffer)
   if (!dim) return null
   if (dim.width === 1536 && dim.height === 1872) return 1
@@ -112,9 +131,21 @@ export function detectSpriteVersion(buffer) {
 }
 
 /** Detect the image file extension from its header ('.webp'/'.png'/'.gif'), or null. */
-export function detectImageExt(buffer) {
-  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return '.webp'
-  if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return '.png'
+export function detectImageExt(buffer: Buffer) {
+  if (
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  )
+    return '.webp'
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  )
+    return '.png'
   if (buffer.length >= 6) {
     const sig = buffer.toString('ascii', 0, 6)
     if (sig === 'GIF87a' || sig === 'GIF89a') return '.gif'
@@ -123,57 +154,96 @@ export function detectImageExt(buffer) {
 }
 
 /** Build the browser URL of one pet asset. */
-function assetUrl(prefix, id, file) {
-  const rel = String(file).split('/').filter((segment) => segment !== '').join('/')
+function assetUrl(prefix: string, id: string, file: string) {
+  const rel = String(file)
+    .split('/')
+    .filter((segment) => segment !== '')
+    .join('/')
   return prefix + '/' + encodeURIComponent(id) + '/' + rel
 }
 
 /** Finite integer guard, else the fallback (0 disables the value). */
-function finiteInt(value, fallback, max) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= max ? value : fallback
+function finiteInt(value: unknown, fallback: number, max: number) {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= max
+    ? value
+    : fallback
 }
 
 /**
  * Normalize one parsed manifest into a renderable pet entry, or undefined
  * (with a warning recorded) when the manifest violates the contract.
  */
-export function resolvePetManifest(raw, dir, options = {}) {
-  const { assetPrefix = '/codex-pet', warnings = [], source = 'builtin' } = options
-  const warn = (message) => { warnings.push(message) }
+export function resolvePetManifest(
+  input: unknown,
+  dir: string,
+  options: ScanOptions = {},
+): PetEntry | undefined {
+  const raw = input as Record<string, unknown>
+  const {
+    assetPrefix = '/codex-pet',
+    warnings = [],
+    source = 'builtin',
+  } = options
+  const warn = (message: string) => {
+    warnings.push(message)
+  }
   if (typeof raw !== 'object' || raw === null) {
     warn('manifest is not an object')
     return undefined
   }
   const id = typeof raw.id === 'string' ? raw.id.trim() : ''
   if (!ID_PATTERN.test(id)) {
-    warn('manifest id ' + JSON.stringify(String(raw.id)) + ' is not a lowercase kebab id')
+    warn(
+      'manifest id ' +
+        JSON.stringify(String(raw.id)) +
+        ' is not a lowercase kebab id',
+    )
     return undefined
   }
-  const displayName = typeof raw.displayName === 'string' && raw.displayName.trim() !== ''
-    ? raw.displayName.trim().slice(0, 80)
-    : id
-  const description = typeof raw.description === 'string' ? raw.description.trim() : ''
-  const spritesheet = typeof raw.spritesheetPath === 'string' && raw.spritesheetPath.trim() !== ''
-    ? raw.spritesheetPath.trim()
-    : 'spritesheet.webp'
+  const displayName =
+    typeof raw.displayName === 'string' && raw.displayName.trim() !== ''
+      ? raw.displayName.trim().slice(0, 80)
+      : id
+  const description =
+    typeof raw.description === 'string' ? raw.description.trim() : ''
+  const spritesheet =
+    typeof raw.spritesheetPath === 'string' && raw.spritesheetPath.trim() !== ''
+      ? raw.spritesheetPath.trim()
+      : 'spritesheet.webp'
   const segments = spritesheet.split('/').filter((segment) => segment !== '')
   if (
-    segments.length === 0
-    || spritesheet.includes('\\')
-    || segments.some((segment) => segment === '..' || !SEGMENT_PATTERN.test(segment))
+    segments.length === 0 ||
+    spritesheet.includes('\\') ||
+    segments.some(
+      (segment) => segment === '..' || !SEGMENT_PATTERN.test(segment),
+    )
   ) {
-    warn('manifest ' + id + ': spritesheetPath ' + JSON.stringify(spritesheet) + ' is not a safe relative path')
+    warn(
+      'manifest ' +
+        id +
+        ': spritesheetPath ' +
+        JSON.stringify(spritesheet) +
+        ' is not a safe relative path',
+    )
     return undefined
   }
   // Sprite version: explicit 1|2 wins; otherwise auto-detect from the atlas
   // image header; otherwise fall back to v2 (11 rows).
-  let spriteVersionNumber = raw.spriteVersionNumber === 1 || raw.spriteVersionNumber === 2
-    ? raw.spriteVersionNumber
-    : null
+  let spriteVersionNumber =
+    raw.spriteVersionNumber === 1 || raw.spriteVersionNumber === 2
+      ? raw.spriteVersionNumber
+      : null
   if (spriteVersionNumber == null) {
     const atlasFile = join(dir, segments.join('/'))
     if (existsSync(atlasFile)) {
-      try { spriteVersionNumber = detectSpriteVersion(readFileSync(atlasFile)) } catch { /* ignore */ }
+      try {
+        spriteVersionNumber = detectSpriteVersion(readFileSync(atlasFile))
+      } catch {
+        /* ignore */
+      }
     }
   }
   if (spriteVersionNumber == null) spriteVersionNumber = 2
@@ -198,7 +268,10 @@ export function resolvePetManifest(raw, dir, options = {}) {
 }
 
 /** Scan one directory of pet folders; entries come back in name order. */
-function scanPetDir(dir, options) {
+function scanPetDir(
+  dir: string,
+  options: ScanOptions & { warnings: string[] },
+) {
   if (!existsSync(dir)) return []
   let names = []
   try {
@@ -215,7 +288,12 @@ function scanPetDir(dir, options) {
     try {
       parsed = JSON.parse(readFileSync(manifestFile, 'utf8'))
     } catch (error) {
-      options.warnings.push('skipping ' + manifestFile + ': ' + (error instanceof Error ? error.message : String(error)))
+      options.warnings.push(
+        'skipping ' +
+          manifestFile +
+          ': ' +
+          (error instanceof Error ? error.message : String(error)),
+      )
       continue
     }
     const entry = resolvePetManifest(parsed, join(dir, name), options)
@@ -232,7 +310,13 @@ function scanPetDir(dir, options) {
  * the 'codexPets' switch simply leaves that source out.
  * Never throws on a bad manifest: it skips it and records a warning.
  */
-export function loadPetRegistry(options) {
+export function loadPetRegistry(options: {
+  packageRoot: string
+  assetPrefix?: string
+  petsDir?: string
+  codexPetsDir?: string
+  codexPets?: boolean
+}): Registry {
   const {
     packageRoot,
     assetPrefix = '/codex-pet',
@@ -240,11 +324,14 @@ export function loadPetRegistry(options) {
     codexPetsDir: codexDir = codexPetsDir(),
     codexPets = true,
   } = options
-  const warnings = []
-  const byId = new Map()
-  const scan = (dir, source) => {
+  const warnings: string[] = []
+  const byId = new Map<string, PetEntry>()
+  const scan = (dir: string, source: string) => {
     for (const entry of scanPetDir(dir, { assetPrefix, warnings, source })) {
-      if (byId.has(entry.id)) warnings.push(source + ' pet ' + entry.id + ' overrides the earlier one')
+      if (byId.has(entry.id))
+        warnings.push(
+          source + ' pet ' + entry.id + ' overrides the earlier one',
+        )
       byId.set(entry.id, entry)
     }
   }
@@ -259,7 +346,7 @@ export function loadPetRegistry(options) {
     codexPetsDir: codexDir,
     /** Whether Codex pets were included in this registry. */
     codexPets: codexPets === true,
-    byId: (id) => byId.get(id),
+    byId: (id) => byId.get(id as string),
     defaultEntry: () => entries[0],
     /** Add (or replace) one entry at runtime — used by the GUI import flow. */
     add(entry) {
@@ -270,7 +357,7 @@ export function loadPetRegistry(options) {
 }
 
 /** Strip host-only fields, leaving the client-visible definition. */
-export function petEntryView(entry) {
+export function petEntryView(entry: PetEntry) {
   return {
     id: entry.id,
     displayName: entry.displayName,

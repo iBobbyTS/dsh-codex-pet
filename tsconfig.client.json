@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "react"
+    ],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/client.template.ts",
+    "src/client-contract.ts",
+    "packages/dsh-codex-pet/src/client.ts",
+    "packages/dsh-codex-pet/src/client-contract.ts"
+  ]
+}

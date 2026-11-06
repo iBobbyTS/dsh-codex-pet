@@ -40,14 +40,18 @@ if (-not (Test-Path (Join-Path $workspace 'lib\client.js'))) {
 if (Test-Path $pluginDst) { Remove-Item $pluginDst -Recurse -Force }
 [System.IO.Directory]::CreateDirectory($pluginDst) | Out-Null
 [System.IO.Directory]::CreateDirectory((Join-Path $pluginDst 'lib')) | Out-Null
-Copy-Item (Join-Path $workspace 'package.json') (Join-Path $pluginDst 'package.json') -Force
-Copy-Item (Join-Path $workspace 'lib\index.js') (Join-Path $pluginDst 'lib\index.js') -Force
-Copy-Item (Join-Path $workspace 'lib\client.js') (Join-Path $pluginDst 'lib\client.js') -Force
-
+# Only runtime manifest fields belong in a per-pet exported package.
+$devManifest = Get-Content (Join-Path $workspace 'package.json') -Raw | ConvertFrom-Json
+$runtimeManifest = [ordered]@{
+    name = $pluginName; version = $devManifest.version; type = 'module';
+    main = 'lib/index.js'; exports = @{ '.' = './lib/index.js'; './client' = './lib/client.js' };
+    files = @('lib'); dsh = $devManifest.dsh; license = $devManifest.license
+}
 $pkgPath = Join-Path $pluginDst 'package.json'
-$pkgText = [System.IO.File]::ReadAllText($pkgPath)
-$pkgText = $pkgText -replace '("name"\s*:\s*")[^"]*(")', "`$1$pluginName`$2"
-[System.IO.File]::WriteAllText($pkgPath, $pkgText, (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($pkgPath, ($runtimeManifest | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
+Copy-Item (Join-Path $workspace 'lib\index.js') (Join-Path $pluginDst 'lib\index.js') -Force
+Copy-Item (Join-Path $workspace 'lib\index.js.map') (Join-Path $pluginDst 'lib\index.js.map') -Force
+Copy-Item (Join-Path $workspace 'lib\client.js') (Join-Path $pluginDst 'lib\client.js') -Force
 Write-Host "[ok] plugin copied to $pluginDst"
 
 # 2) Register in cordis.patch.yml (idempotent + self-healing: ensures exactly

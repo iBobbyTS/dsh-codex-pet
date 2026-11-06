@@ -32,3 +32,7 @@ picture/
 
 # Local task records and temporary tooling
 /.agent-work/
+
+node_modules/
+.build/
+*.tgz

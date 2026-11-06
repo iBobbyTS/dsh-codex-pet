@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, '..');
-const source = fs.readFileSync(path.join(pkgRoot, 'src', 'client.js'), 'utf8');
+const source = fs.readFileSync(path.join(pkgRoot, 'lib', 'client.js'), 'utf8');
 
 // Resolve the paired development dependencies from this package so the test
 // behaves the same on every checkout and in CI.
@@ -620,7 +620,7 @@ test('right click has only the optional hide action, without a legacy menu', () 
   assert.match(source, /controller\.element\.addEventListener\("contextmenu", onContextMenu\)/);
   assert.match(source, /event\.preventDefault\(\);\s*if \(!rightClickHideRef\.current\) return;/);
   assert.match(source, /host\.style\.visibility = "hidden"/);
-  assert.match(source, /RIGHT_CLICK_HIDE_MS = 10_000/);
+  assert.equal(Number(/RIGHT_CLICK_HIDE_MS = ([\d_e.+-]+)/i.exec(source)?.[1]?.replaceAll('_', '')), 10000);
   assert.match(source, /if \(ref\.current\) ref\.current\.style\.visibility = "visible"/);
   assert.match(source, /checkboxField\("右键隐藏 10 秒"/);
 });

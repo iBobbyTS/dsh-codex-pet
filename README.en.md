@@ -20,7 +20,7 @@ cd dsh-codex-pet
 dsh plugin --profile web add "$PWD/packages/dsh-codex-pet"
 ```
 
-The runtime uses source files and bundled artwork directly; do not run the root `build.js` for it. In Desktop, select `packages/dsh-codex-pet` in the application's plugin manager; the application owns the `desktop` profile. In Windows cmd, use the full directory path instead of `$PWD`.
+The runtime uses checked-in prebuilt JS and bundled artwork; do not run the root `build.js` for it. In Desktop, select `packages/dsh-codex-pet` in the application's plugin manager; the application owns the `desktop` profile. In Windows cmd, use the full directory path instead of `$PWD`.
 
 Restart the DSH Host and refresh the page, then select or import a pet in Settings → 桌宠. To update, update this checkout and add the same directory to the same profile again. Avoid mixing it with the upstream version or an exported per-pet plugin.
 
