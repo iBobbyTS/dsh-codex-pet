@@ -2,6 +2,8 @@
 
 Run commands from the repository root. This optional per-pet exporter and its documented install/select/rollback procedures support the CLI `web` profile. For Desktop, follow the [runtime installation guide](../README.en.md#install) to install `packages/dsh-codex-pet`, then import the spritesheet in Settings → 桌宠. The runtime does not require `node build.js`.
 
+The exporter retains its existing automated validation scope. The isolated Web checks covered the nested runtime; they did not export and install a per-pet plugin.
+
 ## Legacy method: one plugin per pet (build.js)
 
 ### Minimal install (for absolute beginners)

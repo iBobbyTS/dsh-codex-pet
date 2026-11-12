@@ -4,7 +4,7 @@ Runtime package of the [iBobbyTS/dsh-codex-pet fork](https://github.com/iBobbyTS
 
 ## Compatibility
 
-Verified: DSH 0.2.2-rc.1 (source review and automated checks); Desktop testing has not been completed.
+Verified: DSH 0.2.2-rc.2 (source review, automated checks, and isolated Web runtime checks): bundled v2 atlas rendering, size and drag-position persistence, local-model-fixture summaries and journal entries, and completion audio-node playback. Desktop and hardware sound quality remain untested.
 
 ## Install
 

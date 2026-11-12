@@ -38,18 +38,18 @@ a peer range the running DSH version does not satisfy disables the **whole row**
 (no pet, no settings section) with
 `Plugin … is incompatible with dsh …: peerDependencies …`.
 
-This plugin therefore declares only peers that exist across the DSH 0.2 line and
-later, with open-ended ranges:
+The runtime pins its Host and Client slot peers to the inspected release:
 
 ```json
-"@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6",
-"@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.6"
+"@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.2",
+"@deepseek-ai/dsh-host-webserver": "0.2.2-rc.2"
 ```
 
-These peer ranges admit later host versions; they are installation metadata, not a claim that every admitted host was tested. This fork has source-contract and automated checks for DSH **0.2.2-rc.1**. Legacy 0.1.x fallback code remains, without a new validation claim for that line. The obsolete
-`@deepseek-ai/dsh-client-runtime` peer is *not* declared: DSH 0.2.0-rc.1 removed
-that package, so declaring it (`^0.1.0-rc.6`, as 0.3.1 did) makes DSH disable the
-row — which is exactly why the pet vanished on 0.2.0-rc.1.
+The former `>=0.1.0-rc.6` ranges do not admit the `0.2.2-rc.2` prerelease under SemVer and can cause pnpm to select old Host packages. The exact peers keep installation and development types on the target release.
+
+This fork has source-contract and minimal automated checks for DSH **0.2.2-rc.2**. Isolated Web runtime checks verified HTTP 200 and rendering for the bundled v2 atlas, size 140 and drag-position persistence, local-model-fixture summaries and journal entries, and completion audio-node playback. Other locally discovered user pets were read only. Desktop and hardware sound quality remain untested. The optional exporter retains its automated validation scope; exported-plugin installation in Web was not tested.
+
+Legacy 0.1.x fallback code remains without a validation claim. The obsolete `@deepseek-ai/dsh-client-runtime` peer is not declared: DSH 0.2.0-rc.1 removed that package.
 
 The same upgrade also **retired the client runtime at runtime**, not just in the
 manifest. On 0.1.x the pet overlay read the conversation from
@@ -194,7 +194,7 @@ overrides are stored under `~/.dsh/pets/sounds/` and survive plugin updates.
 
 ## Validation
 
-Run `pnpm test` from the repository root. DSH 0.2.2-rc.1 was checked against source contracts and automated tests; these checks do not establish a real Desktop end-to-end result.
+Run `pnpm test` from the repository root. DSH 0.2.2-rc.2 was checked against source contracts and automated tests; these checks do not establish a real Desktop end-to-end result.
 
 See [LEGAL](../LEGAL.md) for assets and [AGENTS](../AGENTS.md) for development boundaries.
 

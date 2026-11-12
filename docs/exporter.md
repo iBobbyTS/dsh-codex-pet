@@ -2,6 +2,8 @@
 
 本指南的每宠导出及安装、选择和回滚流程面向 CLI 的 `web` profile，命令均从仓库根目录执行。Desktop 请按[运行时安装说明](../README.md#安装)安装 `packages/dsh-codex-pet`，再到「设置 → 桌宠」导入图集；运行时无需执行 `node build.js`。
 
+本导出工具的当前验证范围为已有自动化检查；本次隔离 Web 验证只覆盖嵌套运行时，未实际导出并安装每宠插件。
+
 ### 安装步骤（零基础，照着做就行）
 
 **开始前需要两样**：① 电脑装了 [Node.js](https://nodejs.org/)（运行 `node` 用）；② 已经装好、能跑起来的 DeepSeek Harness（DSH）。

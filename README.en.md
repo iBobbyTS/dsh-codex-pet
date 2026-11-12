@@ -8,7 +8,7 @@ This repository forks [Signalight/codex-to-dsh-pet](https://github.com/Signaligh
 
 ## Compatibility
 
-Verified: DSH 0.2.2-rc.1 (source review and automated checks); Desktop testing has not been completed.
+Verified: DSH 0.2.2-rc.2 (source review, automated checks, and isolated Web runtime checks): bundled v2 atlas loading/rendering, size and drag-position persistence, local-model-fixture summaries and journal entries, and completion audio-node playback. Desktop and hardware sound quality remain untested. The optional exporter has automated validation only; exported-plugin installation in Web was not tested.
 
 ## Install
 
