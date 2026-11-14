@@ -3,6 +3,9 @@
   "version": "0.5.0",
   "description": "DSH web-GUI pet runtime: renders Codex spritesheet-atlas pets (v1/v2) with drag/wave/jump, live activity poses and progress bubbles. \u628a Codex \u684c\u5ba0\u56fe\u96c6\u6e32\u67d3\u4e3a DSH \u7f51\u9875\u684c\u5ba0\u7684\u8fd0\u884c\u65f6\u63d2\u4ef6\u3002",
   "type": "module",
+  "engines": {
+    "dsh": ">=0.2.2-rc.1"
+  },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
